@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Enxame Zap</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0;font-family:-apple-system,BlinkMacSystemFont,'SF Pro Display',Inter,sans-serif}
+body{width:340px;background:#fbfbfd}
+.card{background:#fff;margin:12px;border-radius:24px;box-shadow:0 8px 24px rgba(0,0,0,0.08);overflow:hidden}
+.header{padding:18px 18px 14px;display:flex;align-items:center;gap:12px;border-bottom:1px solid rgba(0,0,0,0.06)}
+.logo{width:40px;height:40px;background:#1d1d1f;border-radius:12px;display:grid;place-items:center;color:#fff;font-weight:800;font-size:18px}
+.title{font-weight:700;font-size:15px;letter-spacing:-.02em}
+.sub{font-size:12px;color:#86868b;margin-top:2px}
+.body{padding:14px}
+.row{display:flex;gap:8px;margin-bottom:10px}
+.btn{flex:1;border:none;border-radius:999px;padding:12px;font-weight:600;font-size:13px;cursor:pointer;transition:.2s}
+.btn.primary{background:#1d1d1f;color:#fff}
+.btn.secondary{background:#f5f5f7;color:#1d1d1f}
+.btn:hover{transform:translateY(-1px)}
+.stats{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;margin:12px 0}
+.stat{background:#fbfbfd;border:1px solid rgba(0,0,0,0.06);border-radius:14px;padding:10px;text-align:center}
+.stat b{display:block;font-size:18px;font-weight:700}
+.stat span{font-size:11px;color:#86868b}
+.footer{padding:12px 18px;background:#fbfbfd;border-top:1px solid rgba(0,0,0,0.06);font-size:11px;color:#86868b;line-height:1.4}
+</style>
+</head>
+<body>
+<div class="card">
+  <div class="header">
+    <div class="logo">E</div>
+    <div><div class="title">Enxame Zap - Funil HQ</div><div class="sub">PTT nativo • sem encaminhado • backup .zip</div></div>
+  </div>
+  <div class="body">
+    <div class="stats">
+      <div class="stat"><b id="count-audios">0</b><span>Áudios</span></div>
+      <div class="stat"><b id="count-funis">0</b><span>Funis</span></div>
+      <div class="stat"><b id="count-midias">0</b><span>Mídias</span></div>
+    </div>
+    <div class="row">
+      <button class="btn primary" id="open-whatsapp">Abrir WhatsApp Web</button>
+      <button class="btn secondary" id="open-builder">⚡ Builder</button>
+    </div>
+    <div class="row">
+      <button class="btn secondary" id="export-all">📦 Exportar Tudo</button>
+      <label class="btn secondary" style="text-align:center;cursor:pointer">📥 Importar<input type="file" id="import-file" accept=".json,.zip" hidden></label>
+    </div>
+  </div>
+  <div class="footer">
+    <strong>Proteção contra perda:</strong> tudo salvo em IndexedDB + auto-backup na pasta Downloads ao salvar funil. Exporte .enxame.zip com funil.json + /midias/ em alta para importar em outro navegador. 100% gratuito, sem servidor. Mitigação de ban: envio manual 1 a 1, delay humanizado, &lt;50/dia.
+  </div>
+</div>
+<script src="popup.js"></script>
+</body>
+</html>

@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Enxame Builder - Funil HQ</title>
+<link rel="stylesheet" href="builder.css">
+</head>
+<body>
+<div id="app">
+  <header id="builder-header">
+    <div class="left">
+      <button id="btn-back" class="icon-btn">← Voltar ao WhatsApp</button>
+      <div class="title-wrap">
+        <input id="funnel-name" value="Novo Funil" />
+        <span id="funnel-stats">0 passos • 0 ligações • backup automático ativo</span>
+      </div>
+    </div>
+    <div class="right">
+      <button id="btn-import" class="btn secondary">📥 Importar</button>
+      <button id="btn-export-zip" class="btn secondary">📦 Exportar .enxame.zip</button>
+      <button id="btn-save" class="btn primary">💾 Salvar + Auto Backup</button>
+    </div>
+  </header>
+  <div id="builder-body">
+    <aside id="library">
+      <div class="library-title">Biblioteca - Arraste pro Canvas</div>
+      <div class="library-grid">
+        <div class="lib-item" draggable="true" data-type="audio"><span class="lib-icon">🎙️</span><span>Áudio HQ</span><small>PTT nativo OGG 48kHz</small></div>
+        <div class="lib-item" draggable="true" data-type="texto"><span class="lib-icon">📝</span><span>Texto</span><small>com {{nome}}</small></div>
+        <div class="lib-item" draggable="true" data-type="imagem"><span class="lib-icon">🖼️</span><span>Imagem HD</span><small>original sem compressão</small></div>
+        <div class="lib-item" draggable="true" data-type="video"><span class="lib-icon">🎬</span><span>Vídeo HD</span><small>original</small></div>
+      </div>
+      <div class="library-help">
+        <strong>Como ligar:</strong><br>
+        1. Arraste quadrados pro centro<br>
+        2. Clique no ponto preto embaixo do card<br>
+        3. Clique no ponto de cima do próximo card<br>
+        Linha tracejada = ligação do funil
+      </div>
+      <div class="library-medias">
+        <div class="medias-title">Suas Mídias Salvas (IndexedDB)</div>
+        <div id="media-list"></div>
+      </div>
+    </aside>
+    <main id="canvas-wrap">
+      <div id="canvas" tabindex="0">
+        <svg id="edges-svg"></svg>
+        <div id="cards-layer"></div>
+        <div id="canvas-hint">Arraste os quadrados da esquerda pra cá</div>
+      </div>
+      <div id="canvas-controls">
+        <button id="zoom-in">+</button>
+        <button id="zoom-out">−</button>
+        <button id="center-view">◎</button>
+      </div>
+    </main>
+    <aside id="inspector">
+      <div id="inspector-empty">
+        <div style="font-size:32px">👈</div>
+        <div style="font-weight:600;margin-top:12px">Selecione um card</div>
+        <div style="color:#86868b;font-size:13px;margin-top:6px;text-align:center">Clique em um card no canvas para editar áudio, texto, imagem, delay e simulação de digitando/gravando</div>
+      </div>
+      <div id="inspector-content" style="display:none">
+        <div class="inspector-title" id="inspector-title">Primeira Mensagem</div>
+        <div class="inspector-type" id="inspector-type">Áudio</div>
+        <div class="field">
+          <label>Conteúdo / Mídia</label>
+          <div id="inspector-media"></div>
+        </div>
+        <div class="field">
+          <label>Delay após envio (ms)</label>
+          <input type="number" id="field-delay" value="2000" min="500" step="500">
+          <small>Humanizado: + 0.5s a 1.5s aleatório</small>
+        </div>
+        <div class="field row">
+          <label class="toggle"><input type="checkbox" id="field-sim-gravando"><span>Simular gravando / digitando</span></label>
+        </div>
+        <div class="field row">
+          <label class="toggle"><input type="checkbox" id="field-as-document"><span>Enviar como documento (HD máxima)</span></label>
+        </div>
+        <button id="btn-delete-node" class="btn danger" style="width:100%;margin-top:20px">🗑️ Remover Card</button>
+      </div>
+    </aside>
+  </div>
+</div>
+<input type="file" id="file-import" accept=".json,.zip" hidden>
+<script src="lib/jszip.min.js"></script>
+<script src="builder.js"></script>
+</body>
+</html>

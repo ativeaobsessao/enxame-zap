@@ -1,0 +1,17 @@
+{
+  "manifest_version": 3,
+  "name": "Enxame Zap - PTT ZapVoice v2.7 BLUEPRINT DEFINITIVO",
+  "version": "2.7.0",
+  "description": "Blueprint definitivo: fix Store.Chat nao disponivel + WPP nao disponivel + chatId :9 + remove WAWebChatModels spam - ZapVoice 48kHz mono 128k Gain 3.5x",
+  "permissions": ["storage","downloads"],
+  "host_permissions": ["https://web.whatsapp.com/*"],
+  "background": {"service_worker": "background.js"},
+  "content_scripts": [
+    {"matches": ["https://web.whatsapp.com/*"], "js": ["lib/wpp-main.js"], "run_at": "document_start", "world": "MAIN"},
+    {"matches": ["https://web.whatsapp.com/*"], "js": ["lib/wpp-main.js"], "run_at": "document_idle", "world": "MAIN"},
+    {"matches": ["https://web.whatsapp.com/*"], "js": ["lib/jszip.min.js","lib/audio-pipeline.js","lib/ffmpeg.js","content.js"], "css": ["content.css"], "run_at": "document_idle", "world": "ISOLATED"}
+  ],
+  "web_accessible_resources": [{"resources": ["builder.html","builder.css","builder.js","popup.html","popup.js","lib/*","icons/*","lib/ffmpeg-core.js","lib/ffmpeg-core.wasm","lib/ffmpeg-core.worker.js","lib/audio-worker.js"], "matches": ["https://web.whatsapp.com/*","<all_urls>"]}],
+  "action": {"default_popup": "popup.html","default_title": "Enxame Zap","default_icon": {"16":"icons/icon16.png","48":"icons/icon48.png","128":"icons/icon128.png"}},
+  "icons": {"16":"icons/icon16.png","48":"icons/icon48.png","128":"icons/icon128.png"}
+}
