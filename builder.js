@@ -333,7 +333,13 @@ document.getElementById('file-import').onchange=async (e)=>{
   } catch(err){ toast('Erro ao importar: '+err.message); }
 };
 
-document.getElementById('btn-back').onclick=()=>{ window.close(); };
+document.getElementById('btn-back').onclick=()=>{
+  try { window.close(); } catch(e){}
+  setTimeout(()=>{
+    if(window.history.length > 1) { window.history.back(); }
+    else { window.location.href = '/'; }
+  }, 100);
+};
 
 document.getElementById('field-delay').oninput=(e)=>{
   const node=funnel.nodes.find(n=>n.id===selectedNodeId); if(node) node.delay=parseInt(e.target.value)||2000;
@@ -357,5 +363,13 @@ document.getElementById('btn-delete-node').onclick=()=>{
 
 document.getElementById('zoom-in').onclick=()=>{ cardsLayer.style.transform=`scale(${(parseFloat(cardsLayer.dataset.scale||1)+0.1).toFixed(1)})`; cardsLayer.dataset.scale=parseFloat(cardsLayer.style.transform.match(/scale\((.*)\)/)[1]); };
 document.getElementById('zoom-out').onclick=()=>{ cardsLayer.style.transform=`scale(${Math.max(0.5, (parseFloat(cardsLayer.dataset.scale||1)-0.1)).toFixed(1)})`; };
+const btnCenter = document.getElementById('center-view');
+if(btnCenter){
+  btnCenter.onclick=()=>{
+    canvas.scrollLeft=0; canvas.scrollTop=0;
+    cardsLayer.style.transform='scale(1)';
+    cardsLayer.dataset.scale='1';
+  };
+}
 
 (async()=>{ await openDB(); await loadFunnel(); })();

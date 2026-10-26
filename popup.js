@@ -1,3 +1,17 @@
+// Fallback for chrome extension APIs in web context
+if (typeof window.chrome === 'undefined') window.chrome = {};
+if (!window.chrome.runtime) {
+  window.chrome.runtime = {
+    getURL: (path) => path.startsWith('/') ? path : '/' + path,
+    onMessage: { addListener: () => {} },
+    sendMessage: (msg, cb) => { if (cb) cb({ ok: true }); }
+  };
+}
+if (!window.chrome.tabs) {
+  window.chrome.tabs = {
+    create: ({ url }) => { window.open(url, '_blank') || (window.location.href = url); }
+  };
+}
 
 const DB_NAME='enxame_zap_db', DB_VERSION=2;
 function openDB(){

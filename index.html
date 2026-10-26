@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Enxame Zap</title>
+<meta name="description" content="Visual funnel builder and PTT ZapVoice automation suite for WhatsApp Web with audio pipeline and backup.">
+<meta property="og:title" content="Enxame Zap">
+<meta property="og:description" content="Visual funnel builder and PTT ZapVoice automation suite for WhatsApp Web with audio pipeline and backup.">
+<link rel="icon" type="image/png" href="icons/icon48.png">
+<link rel="stylesheet" href="builder.css">
+<style>
+/* Header enhancements for the web suite */
+.brand-badge {
+  width: 38px;
+  height: 38px;
+  background: #1d1d1f;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-weight: 800;
+  font-size: 18px;
+  letter-spacing: -0.03em;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+  flex-shrink: 0;
+}
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+/* Modal Backdrop for Popup & Extension info */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.45);
+  backdrop-filter: blur(8px);
+  display: none;
+  place-items: center;
+  z-index: 10000;
+  padding: 16px;
+}
+.modal-overlay.active {
+  display: grid;
+}
+.modal-box {
+  background: #fff;
+  border-radius: 24px;
+  box-shadow: 0 20px 48px rgba(0,0,0,0.2);
+  width: 100%;
+  max-width: 420px;
+  overflow: hidden;
+  position: relative;
+  animation: modalIn .2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+@keyframes modalIn {
+  from { opacity: 0; transform: scale(0.94); }
+  to { opacity: 1; transform: scale(1); }
+}
+.modal-header {
+  padding: 18px 20px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid rgba(0,0,0,0.06);
+}
+.modal-close-btn {
+  background: #f5f5f7;
+  border: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  cursor: pointer;
+  font-size: 16px;
+  display: grid;
+  place-items: center;
+  color: #86868b;
+  transition: .15s;
+}
+.modal-close-btn:hover {
+  background: #e5e5ea;
+  color: #1d1d1f;
+}
+.popup-stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+  margin: 14px 0;
+}
+.popup-stat {
+  background: #fbfbfd;
+  border: 1px solid rgba(0,0,0,0.06);
+  border-radius: 14px;
+  padding: 10px;
+  text-align: center;
+}
+.popup-stat b {
+  display: block;
+  font-size: 18px;
+  font-weight: 700;
+}
+.popup-stat span {
+  font-size: 11px;
+  color: #86868b;
+}
+.modal-body {
+  padding: 16px 20px;
+}
+.modal-footer {
+  padding: 14px 20px;
+  background: #fbfbfd;
+  border-top: 1px solid rgba(0,0,0,0.06);
+  font-size: 11px;
+  color: #86868b;
+  line-height: 1.45;
+}
+.btn-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.btn-row .btn {
+  flex: 1;
+  text-align: center;
+  padding: 12px;
+}
+</style>
+</head>
+<body>
+<div id="app">
+  <header id="builder-header">
+    <div class="left">
+      <div class="brand-badge">E</div>
+      <div class="title-wrap">
+        <input id="funnel-name" value="Novo Funil" title="Nome do Funil" />
+        <span id="funnel-stats">0 passos • 0 ligações • backup automático ativo</span>
+      </div>
+    </div>
+    <div class="header-actions">
+      <button id="btn-open-popup-modal" class="btn secondary" title="Ver painel rápido e estatísticas">📱 Painel / Extensão</button>
+      <button id="btn-import" class="btn secondary">📥 Importar</button>
+      <button id="btn-export-zip" class="btn secondary">📦 Exportar .enxame.zip</button>
+      <button id="btn-save" class="btn primary">💾 Salvar + Auto Backup</button>
+    </div>
+  </header>
+  <div id="builder-body">
+    <aside id="library">
+      <div class="library-title">Biblioteca - Arraste pro Canvas</div>
+      <div class="library-grid">
+        <div class="lib-item" draggable="true" data-type="audio"><span class="lib-icon">🎙️</span><span>Áudio HQ</span><small>PTT nativo OGG 48kHz</small></div>
+        <div class="lib-item" draggable="true" data-type="texto"><span class="lib-icon">📝</span><span>Texto</span><small>com {{nome}}</small></div>
+        <div class="lib-item" draggable="true" data-type="imagem"><span class="lib-icon">🖼️</span><span>Imagem HD</span><small>original sem compressão</small></div>
+        <div class="lib-item" draggable="true" data-type="video"><span class="lib-icon">🎬</span><span>Vídeo HD</span><small>original</small></div>
+      </div>
+      <div class="library-help">
+        <strong>Como ligar os cards:</strong><br>
+        1. Arraste itens da esquerda para o canvas<br>
+        2. Clique no ponto preto embaixo do card<br>
+        3. Clique no ponto de cima do próximo card<br>
+        <em>Linha tracejada = sequência de envio</em>
+      </div>
+      <div class="library-medias">
+        <div class="medias-title">Suas Mídias Salvas (IndexedDB)</div>
+        <div id="media-list"></div>
+      </div>
+    </aside>
+    <main id="canvas-wrap">
+      <div id="canvas" tabindex="0">
+        <svg id="edges-svg"></svg>
+        <div id="cards-layer"></div>
+        <div id="canvas-hint">Arraste os blocos da esquerda pra cá</div>
+      </div>
+      <div id="canvas-controls">
+        <button id="zoom-in" title="Aumentar zoom">+</button>
+        <button id="zoom-out" title="Diminuir zoom">−</button>
+        <button id="center-view" title="Centralizar visualização">◎</button>
+      </div>
+    </main>
+    <aside id="inspector">
+      <div id="inspector-empty">
+        <div style="font-size:32px">👈</div>
+        <div style="font-weight:600;margin-top:12px">Selecione um card</div>
+        <div style="color:#86868b;font-size:13px;margin-top:6px;text-align:center">Clique em um card no canvas para editar áudio, texto, imagem, delay e simulação de digitando/gravando</div>
+      </div>
+      <div id="inspector-content" style="display:none">
+        <div class="inspector-title" id="inspector-title">Primeira Mensagem</div>
+        <div class="inspector-type" id="inspector-type">Áudio</div>
+        <div class="field">
+          <label>Conteúdo / Mídia</label>
+          <div id="inspector-media"></div>
+        </div>
+        <div class="field">
+          <label>Delay após envio (ms)</label>
+          <input type="number" id="field-delay" value="2000" min="500" step="500">
+          <small>Humanizado: + 0.5s a 1.5s aleatório para evitar detecção</small>
+        </div>
+        <div class="field row">
+          <label class="toggle"><input type="checkbox" id="field-sim-gravando"><span>Simular gravando / digitando</span></label>
+        </div>
+        <div class="field row">
+          <label class="toggle"><input type="checkbox" id="field-as-document"><span>Enviar como documento (HD máxima)</span></label>
+        </div>
+        <button id="btn-delete-node" class="btn danger" style="width:100%;margin-top:20px">🗑️ Remover Card</button>
+      </div>
+    </aside>
+  </div>
+</div>
+
+<!-- Modal Popup Card (Enxame Zap Quick View) -->
+<div id="popup-modal" class="modal-overlay">
+  <div class="modal-box">
+    <div class="modal-header">
+      <div style="display:flex;align-items:center;gap:10px">
+        <div class="brand-badge" style="width:32px;height:32px;font-size:15px">E</div>
+        <div>
+          <div style="font-weight:700;font-size:15px">Enxame Zap - Funil HQ</div>
+          <div style="font-size:11px;color:#86868b">PTT nativo • sem encaminhado • backup .zip</div>
+        </div>
+      </div>
+      <button class="modal-close-btn" id="btn-close-popup-modal" aria-label="Fechar">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="popup-stats-grid">
+        <div class="popup-stat"><b id="modal-count-audios">0</b><span>Áudios</span></div>
+        <div class="popup-stat"><b id="modal-count-funis">0</b><span>Funis</span></div>
+        <div class="popup-stat"><b id="modal-count-midias">0</b><span>Mídias</span></div>
+      </div>
+      <div class="btn-row">
+        <button class="btn primary" id="modal-open-whatsapp">Abrir WhatsApp Web</button>
+        <button class="btn secondary" id="modal-focus-builder">⚡ Focar Builder</button>
+      </div>
+      <div class="btn-row">
+        <button class="btn secondary" id="modal-export-all">📦 Exportar Todos Funis</button>
+        <label class="btn secondary" style="cursor:pointer">📥 Importar<input type="file" id="modal-import-file" accept=".json,.zip" hidden></label>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <strong>Proteção contra perda:</strong> tudo salvo em IndexedDB + auto-backup na pasta Downloads ao salvar funil. Exporte .enxame.zip com funil.json + /midias/ em alta para importar em outro navegador. 100% gratuito, sem servidor. Mitigação de ban: envio manual 1 a 1, delay humanizado, &lt;50/dia.
+    </div>
+  </div>
+</div>
+
+<input type="file" id="file-import" accept=".json,.zip" hidden>
+<!-- Scripts -->
+<script src="lib/jszip.min.js"></script>
+<script>
+  if (typeof JSZip === 'undefined') {
+    document.write('<script src="jszip.min.js"><\\/script>');
+  }
+</script>
+<script src="builder.js"></script>
+<script>
+// Wire the integrated Popup Modal controls and live stats
+const popupModal = document.getElementById('popup-modal');
+const btnOpenPopup = document.getElementById('btn-open-popup-modal');
+const btnClosePopup = document.getElementById('btn-close-popup-modal');
+const modalFocusBuilder = document.getElementById('modal-focus-builder');
+
+function openPopupModal() {
+  popupModal.classList.add('active');
+  refreshModalStats();
+}
+function closePopupModal() {
+  popupModal.classList.remove('active');
+}
+
+btnOpenPopup.onclick = openPopupModal;
+btnClosePopup.onclick = closePopupModal;
+modalFocusBuilder.onclick = closePopupModal;
+popupModal.onclick = (e) => {
+  if (e.target === popupModal) closePopupModal();
+};
+
+async function refreshModalStats() {
+  try {
+    const audios = await idbGetAll('audios');
+    const funis = await idbGetAll('funis');
+    const imagens = await idbGetAll('imagens');
+    const videos = await idbGetAll('videos');
+    document.getElementById('modal-count-audios').textContent = (audios || []).length;
+    document.getElementById('modal-count-funis').textContent = (funis || []).length;
+    document.getElementById('modal-count-midias').textContent = ((imagens || []).length + (videos || []).length);
+  } catch(e) {
+    console.warn('Error reading stats:', e);
+  }
+}
+
+document.getElementById('modal-open-whatsapp').onclick = () => {
+  window.open('https://web.whatsapp.com', '_blank');
+};
+
+document.getElementById('modal-export-all').onclick = async () => {
+  try {
+    const funis = await idbGetAll('funis');
+    if (!funis || !funis.length) {
+      alert('Nenhum funil salvo para exportar');
+      return;
+    }
+    const blob = new Blob([JSON.stringify(funis, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `enxame_backup_completo_${new Date().toISOString().slice(0, 10)}.json`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  } catch(err) {
+    alert('Erro ao exportar: ' + err.message);
+  }
+};
+
+document.getElementById('modal-import-file').onchange = async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  try {
+    const txt = await file.text();
+    const data = JSON.parse(txt);
+    const list = Array.isArray(data) ? data : [data];
+    for (const f of list) {
+      await idbPut('funis', f);
+    }
+    alert(`${list.length} funil(is) importado(s)`);
+    refreshModalStats();
+    loadFunnel();
+  } catch(err) {
+    alert('Erro na importação: ' + err.message);
+  }
+};
+
+document.getElementById('center-view').onclick = () => {
+  const canvas = document.getElementById('canvas');
+  canvas.scrollLeft = 0;
+  canvas.scrollTop = 0;
+  const cardsLayer = document.getElementById('cards-layer');
+  cardsLayer.style.transform = 'scale(1)';
+  cardsLayer.dataset.scale = '1';
+};
+</script>
+</body>
+</html>

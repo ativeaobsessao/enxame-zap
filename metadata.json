@@ -1,0 +1,8 @@
+{
+  "name": "Enxame Zap",
+  "description": "Visual funnel builder and PTT ZapVoice automation suite for WhatsApp Web with audio pipeline and backup.",
+  "prompt": "Enxame Zap - Funil HQ & PTT ZapVoice v2.7",
+  "capabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

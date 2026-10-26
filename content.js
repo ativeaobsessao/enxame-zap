@@ -96,25 +96,18 @@
   }
 
   function injectMainWorld(){
-    // v2.5 STORE INDEPENDENT - Agora injeção MAIN world é feita pelo manifest world:MAIN (wa-js.js + wpp-main.js)
-    // Isso evita CSP e garante WPP? true Store? true - ZapVoice tech
     try {
-      console.log('[Enxame v2.7] injectMainWorld: MAIN world já injetado via manifest world:MAIN, fazendo ping de saúde');
-      const taskId='ping_'+Date.now()+'_'+Math.random().toString(36).slice(2);
-      const timeout=setTimeout(()=>{ console.warn('[Enxame v2.5] Ping MAIN world sem resposta - recarregue F5 se envio falhar'); }, 4000);
-      const handler=(event)=>{
-        if(event.source!==window) return;
-        const d=event.data;
-        if(!d||!d.__fromEnxameWPP) return;
-        if(d.type==='ENXAME_PONG' && d.taskId===taskId){
-          clearTimeout(timeout);
-          window.removeEventListener('message',handler);
-          console.log('%c[Enxame v2.5] MAIN world respondeu: WPP? '+d.hasWPP+' Store? '+d.hasStore+' DOM? '+d.hasDOM+' chatId? '+(d.chatId?'sim':'não'),'background:#30d158;color:#fff;padding:3px 8px;border-radius:999px;font-weight:600');
-        }
-      };
-      window.addEventListener('message',handler);
-      window.postMessage({type:'ENXAME_PING', taskId}, '*');
-    } catch(e){ console.warn('injectMainWorld v2.5 ping fail', e); }
+      if(!window.EnxameBridge) return;
+      window.EnxameBridge.request('ping', {}, { timeoutMs: 5000 })
+        .then(res => {
+          const caps = res.data?.capabilities || {};
+          console.log('%c[Enxame v2.8] MAIN world respondeu ping:', 'background:#30d158;color:#fff;padding:3px 8px;border-radius:999px;font-weight:600', caps);
+          updateWPPDot();
+        })
+        .catch(e => {
+          console.warn('[Enxame v2.8] Ping inicial MAIN world:', e.message);
+        });
+    } catch(e){ console.warn('injectMainWorld fail', e); }
   }
 
   // ===== ENVIO TEXTO =====
@@ -122,13 +115,6 @@
     const final=replaceVars(text);
     closeModal();
     toast('Enviando texto...');
-    try {
-      if(window.EnxameWPP?.sendText){
-        await window.EnxameWPP.sendText(final);
-        toast('Texto enviado • 1 clique');
-        return;
-      }
-    } catch(e){ console.warn('WPP sendText fail', e); }
     try {
       const sels=['div[contenteditable="true"][data-tab="10"]','div[contenteditable="true"][data-lexical-editor="true"]','footer div[contenteditable="true"]','[data-testid="conversation-compose-box-input"]'];
       let input=null; for(const sel of sels){ input=document.querySelector(sel); if(input) break; }
@@ -140,92 +126,72 @@
         const btn=document.querySelector('[data-testid="compose-btn-send"]') || document.querySelector('span[data-icon="send"]')?.closest('button') || document.querySelector('button[aria-label="Enviar"]');
         if(btn) btn.click(); else { input.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',code:'Enter',keyCode:13,bubbles:true})); }
         toast('Texto enviado • 1 clique');
-        return;
+        return { ok: true, strategy: 'DOM' };
       }
     } catch(e){ console.warn('DOM send fail', e); }
-    toast('Erro ao enviar - abra o chat do lead');
+    const err = new Error('Erro ao enviar - abra o chat do lead');
+    err.code = 'TEXT_SEND_FAILED';
+    toast(err.message);
+    throw err;
   }
 
-  // ===== ENVIO ÁUDIO PTT PERFEITO v2.7 - BLUEPRINT DEFINITIVO + PONTE ZapVoice REAL - FIX DOM? true =====
+  // ===== ENVIO ÁUDIO PTT PERFEITO v2.8 - VIA ENXAME BRIDGE CLIENT =====
   async function sendAudioHQInstant(blobOrItem){
-    // v2.7 BLUEPRINT - Tech ZapVoice: Gain 3.5x + 48kHz mono 128k + waveform 64 barras + ponte MAIN world com DOM robusto
-    // Content script ISOLATED não acessa window.WPP - manda ArrayBuffer via postMessage, wpp-main.js MAIN world extrai Store via webpack 25s polling e DOM @c.us/@g.us
     let blob = blobOrItem?.blob || blobOrItem;
     let preWaveform = blobOrItem?.waveform;
     let preDuration = blobOrItem?.duration;
     let preIsWebM = blobOrItem?.isWebM || (blob.type && blob.type.includes('webm'));
     closeModal();
-    toast('Enviando PTT ZapVoice v2.7 BLUEPRINT...');
+    toast('Enviando PTT ZapVoice v2.8...');
     
     try {
+      if(!window.EnxameBridge){
+        const err = new Error('Ponte EnxameBridge não carregada');
+        err.code = 'BRIDGE_NOT_FOUND';
+        throw err;
+      }
+
       const arrayBuffer = await blob.arrayBuffer();
-      const taskId = 'enxame_'+Date.now()+'_'+Math.random().toString(36).slice(2,7);
-      
-      const result = await new Promise((resolve, reject)=>{
-        let done=false;
-        const timeout = setTimeout(()=>{
-          if(done) return;
-          done=true;
-          window.removeEventListener('message', handler);
-          reject(new Error('Timeout ponte 20s - WhatsApp ainda carregando Store? Recarregue F5 com chat do Dude Vô aberto'));
-        }, 20000);
-
-        function handler(event){
-          if(event.source !== window) return;
-          const data = event.data;
-          if(!data || data.type !== 'ENXAME_SEND_PTT_RESULT' || data.taskId !== taskId) return;
-          if(done) return;
-          done=true;
-          clearTimeout(timeout);
-          window.removeEventListener('message', handler);
-          if(data.ok){
-            resolve(data);
-          } else {
-            reject(new Error(data.error || 'Falha envio PTT'));
-          }
+      const res = await window.EnxameBridge.request('send_media', {
+        buffer: arrayBuffer,
+        mime: blob.type,
+        waveform: preWaveform || true,
+        duration: preDuration || 5,
+        isWebM: !!preIsWebM
+      }, {
+        timeoutMs: 25000,
+        onProgress: (stage) => {
+          if(stage === 'RESOLVING_CHAT') toast('Verificando chat ativo...');
+          else if(stage === 'PREPARING_MEDIA') toast('Processando áudio PTT...');
+          else if(stage === 'SENDING') toast('Transmitindo áudio via ZapVoice...');
         }
-
-        window.addEventListener('message', handler);
-        window.postMessage({
-          type:'ENXAME_SEND_PTT',
-          taskId,
-          buffer: arrayBuffer,
-          mime: blob.type,
-          waveform: preWaveform || true,
-          duration: preDuration || 5,
-          isWebM: !!preIsWebM
-        }, '*');
-        console.log('[Enxame v2.7] postMessage ENXAME_SEND_PTT enviado', taskId, 'size', arrayBuffer.byteLength, 'isWebM', preIsWebM, 'waveform', Array.isArray(preWaveform)? preWaveform.length+' barras' : preWaveform);
       });
 
-      console.log('[Enxame v2.7] Ponte OK - áudio PTT enviado no mundo página', result);
-      toast('Áudio PTT perfeito enviado • ZapVoice 48kHz mono 128k • sem encaminhado • 1x/2x OK');
-      
+      toast('Áudio PTT perfeito enviado • ZapVoice 48kHz mono 128k • sem encaminhado');
+      return { ok: true, strategy: res.strategy, stage: res.stage, ms: res.ms };
     } catch(e){
-      console.error('[Enxame v2.7] sendAudioHQInstant ponte fail', e);
-      toast('Erro envio PTT: '+e.message);
+      console.error('[Enxame v2.8] sendAudioHQInstant falhou:', e);
+      toast('Erro envio PTT: ' + (e.message || String(e)));
+      throw e;
     }
   }
 
   async function sendImagemInstant(blob, asDoc=false){
     closeModal();
-    toast(asDoc?'Enviando imagem HD como documento...':'Enviando imagem...');
-    try {
-      if(window.EnxameWPP?.sendImage){ await window.EnxameWPP.sendImage(blob, asDoc); toast(asDoc?'Imagem HD enviada':'Imagem enviada'); return; }
-    } catch(e){ console.warn('sendImage fail', e); }
+    const err = new Error('Envio de imagem em implementação');
+    err.code = 'NOT_IMPLEMENTED';
+    toast('Envio de imagem em implementação');
+    console.warn('[Enxame v2.8]', err.message);
+    throw err;
   }
+
   async function sendVideoInstant(blob){
     closeModal();
-    toast('Enviando vídeo HD...');
-    try {
-      const file=new File([blob], 'video.mp4', {type:blob.type});
-      if(window.WPP?.chat?.sendFileMessage){
-        const chatId=window.EnxameWPP?.getCurrentChatId?.()||'mock';
-        await window.WPP.chat.sendFileMessage(chatId, file, {type:'video'});
-        toast('Vídeo HD enviado'); return;
-      }
-    } catch(e){ console.warn('video fail', e); }
-    toast('Erro ao enviar vídeo');
+    const err = new Error('Envio de vídeo em implementação');
+    err.code = 'NOT_IMPLEMENTED';
+    toast('Envio de vídeo em implementação');
+    console.warn('[Enxame v2.8]', err.message);
+    throw err;
   }
 
   // ===== BACKUP =====
@@ -288,13 +254,34 @@
         const delay=node.delay||(node.tipo==='audio'?2400:1200);
         const jitter=400+Math.random()*1200;
         if(i>0) await new Promise(r=>setTimeout(r, delay+jitter));
-        if(node.tipo==='audio'){ const m=await idbGet('audios', node.mediaId); if(m?.blob) await sendAudioHQInstant(m.blob); }
-        else if(node.tipo==='texto'){ const m=await idbGet('textos', node.mediaId); if(m) await sendTextoInstant(m.conteudo||node.conteudo||''); else if(node.conteudo) await sendTextoInstant(node.conteudo); }
-        else if(node.tipo==='imagem'){ const m=await idbGet('imagens', node.mediaId); if(m?.blob) await sendImagemInstant(m.blob, node.asDocument); }
-        else if(node.tipo==='video'){ const m=await idbGet('videos', node.mediaId); if(m?.blob) await sendVideoInstant(m.blob); }
+        try {
+          if(node.tipo==='audio'){
+            const m=await idbGet('audios', node.mediaId);
+            if(m) await sendAudioHQInstant(m);
+            else throw new Error('Áudio não encontrado no banco');
+          }
+          else if(node.tipo==='texto'){
+            const m=node.mediaId ? await idbGet('textos', node.mediaId) : null;
+            const textContent = m?.conteudo || node.conteudo || '';
+            await sendTextoInstant(textContent);
+          }
+          else if(node.tipo==='imagem'){
+            const m=await idbGet('imagens', node.mediaId);
+            await sendImagemInstant(m?.blob, node.asDocument);
+          }
+          else if(node.tipo==='video'){
+            const m=await idbGet('videos', node.mediaId);
+            await sendVideoInstant(m?.blob);
+          }
+        } catch(stepErr){
+          toast(`Disparo interrompido no passo ${i+1}: ${stepErr.message}`);
+          throw stepErr;
+        }
       }
-      toast(`Funil ${funil.nome} concluído`);
-    } catch(e){ console.error(e); toast('Erro funil: '+e.message); }
+      toast(`Funil ${funil.nome} concluído com sucesso`);
+    } catch(e){
+      console.error('[Enxame v2.8] Erro no funil:', e);
+    }
   }
 
   // ===== Hidden file input =====
@@ -421,11 +408,33 @@
       }
     } catch(e){ console.warn('badges fail', e); }
   }
-  function updateWPPDot(){
+  async function updateWPPDot(){
     const dot=$('#enxame-wpp-dot'); if(!dot) return;
-    const ready=!!(window.WPP?.chat?.sendFileMessage || window.__ENXAME_WPP_READY__);
-    dot.style.background=ready?'#30d158':'#ff9f0a';
-    dot.title=ready?'WPP pronto - PTT ZapVoice':'Carregando WPP...';
+    try {
+      if(!window.EnxameBridge){
+        dot.style.background='#86868b';
+        dot.title='Ponte Enxame não carregada';
+        return;
+      }
+      const res = await window.EnxameBridge.request('capabilities', {}, { timeoutMs: 4000 });
+      const caps = res.data || {};
+      const ready = !!(caps.hasWpp || caps.hasStoreChat);
+      if(ready){
+        if(caps.hasActiveChat){
+          dot.style.background='#30d158';
+          dot.title='Pronto • Chat ativo detectado';
+        } else {
+          dot.style.background='#30d158';
+          dot.title='Pronto • Abra uma conversa para enviar';
+        }
+      } else {
+        dot.style.background='#ff9f0a';
+        dot.title='Carregando WhatsApp Web...';
+      }
+    } catch(e){
+      dot.style.background='#86868b';
+      dot.title='Aguardando WhatsApp';
+    }
   }
 
   // ===== MODAL APPLE =====
@@ -847,10 +856,14 @@
           const id=btn.dataset.send;
           const item=await idbGet(store, id);
           if(!item) return;
-          if(type==='audio') await sendAudioHQInstant(item);
-          else if(type==='texto') await sendTextoInstant(item.conteudo);
-          else if(type==='imagem') await sendImagemInstant(item.blob, false);
-          else if(type==='video') await sendVideoInstant(item.blob);
+          try {
+            if(type==='audio') await sendAudioHQInstant(item);
+            else if(type==='texto') await sendTextoInstant(item.conteudo);
+            else if(type==='imagem') await sendImagemInstant(item.blob, false);
+            else if(type==='video') await sendVideoInstant(item.blob);
+          } catch(err){
+            console.warn('[Enxame v2.8] Falha ao enviar item:', err);
+          }
         };
       });
     } catch(e){
@@ -863,10 +876,12 @@
     injectMainWorld();
     ensureHiddenFileInput();
     try { await ensureDB(); } catch(e){ console.warn('DB init fail', e); }
-    const observer=new MutationObserver(()=>{ ensurePillsBar(); updateWPPDot(); });
+    const observer=new MutationObserver(()=>{ ensurePillsBar(); });
     observer.observe(document.body, {childList:true, subtree:true});
     ensurePillsBar();
-    setInterval(()=>{ ensurePillsBar(); updateBadges(); updateWPPDot(); }, 2500);
-    console.log('%cEnxame Zap v2.1 ZapVoice - Gain 3.5x + 48kHz 128k loudnorm + Lixeira','background:#1d1d1f;color:#fff;padding:8px 14px;border-radius:999px;font-weight:700');
+    setInterval(()=>{ ensurePillsBar(); updateBadges(); }, 2500);
+    setInterval(()=>{ updateWPPDot(); }, 5000);
+    updateWPPDot();
+    console.log('%cEnxame Zap v2.8.0 ZapVoice - Ponte v1 + PTT Seguro','background:#1d1d1f;color:#fff;padding:8px 14px;border-radius:999px;font-weight:700');
   })();
 })();

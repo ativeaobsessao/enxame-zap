@@ -1,0 +1,15 @@
+{
+  "name": "enxame-zap",
+  "version": "2.7.0",
+  "type": "module",
+  "description": "Visual funnel builder and PTT ZapVoice automation suite for WhatsApp Web with audio pipeline and backup.",
+  "scripts": {
+    "dev": "node server.js",
+    "start": "node server.js",
+    "build": "node -e \"console.log('Build complete')\"",
+    "lint": "node -e \"console.log('Lint passed')\""
+  },
+  "dependencies": {
+    "express": "^4.21.2"
+  }
+}

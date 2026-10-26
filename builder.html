@@ -86,6 +86,7 @@
 </div>
 <input type="file" id="file-import" accept=".json,.zip" hidden>
 <script src="lib/jszip.min.js"></script>
+<script>if (typeof JSZip === 'undefined') { document.write('<script src="jszip.min.js"><\\/script>'); }</script>
 <script src="builder.js"></script>
 </body>
 </html>
