@@ -1,0 +1,47 @@
+@import "tailwindcss";
+
+@layer base {
+  * {
+    box-sizing: border-box;
+  }
+  html, body {
+    height: 100%;
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'SF Pro Text', Inter, sans-serif;
+    background: #fbfbfd;
+    color: #1d1d1f;
+  }
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: rgba(0, 0, 0, 0.15);
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(0, 0, 0, 0.25);
+}
+
+/* Animated dotted/dashed line flow */
+@keyframes flowDash {
+  to {
+    stroke-dashoffset: -24;
+  }
+}
+.flowing-edge {
+  animation: flowDash 1.2s linear infinite;
+}
+
+/* WhatsApp chat wallpaper pattern */
+.wpp-wallpaper {
+  background-color: #efeae2;
+  background-image: radial-gradient(rgba(0, 0, 0, 0.05) 1px, transparent 1px);
+  background-size: 20px 20px;
+}

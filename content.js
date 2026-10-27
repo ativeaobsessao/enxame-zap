@@ -176,22 +176,90 @@
     }
   }
 
-  async function sendImagemInstant(blob, asDoc=false){
+  async function sendImagemInstant(blob, asDoc=false, caption=''){
     closeModal();
-    const err = new Error('Envio de imagem em implementação');
-    err.code = 'NOT_IMPLEMENTED';
-    toast('Envio de imagem em implementação');
-    console.warn('[Enxame v2.8]', err.message);
-    throw err;
+    if(!blob){
+      const err = new Error('Nenhum arquivo de imagem fornecido');
+      err.code = 'INVALID_BLOB';
+      toast('Nenhuma imagem selecionada');
+      throw err;
+    }
+    toast(asDoc ? 'Enviando imagem como documento (original)...' : 'Enviando imagem HD...');
+    try {
+      if(!window.EnxameDomSender){
+        const err = new Error('Módulo EnxameDomSender não carregado');
+        err.code = 'DOM_SENDER_NOT_FOUND';
+        throw err;
+      }
+      const res = await window.EnxameDomSender.send({
+        kind: 'image',
+        blob,
+        asDocument: !!asDoc,
+        caption: caption || ''
+      });
+
+      if(res.strategy === 'MENU_INTERCEPT_DOCUMENT' && res.ok){
+        toast('Documento enviado (original)');
+      } else if(res.stage === 'sent' && res.verified){
+        toast('Enviado');
+      } else if(!res.verified){
+        toast('Enviado, mas o status não foi confirmado');
+      } else {
+        toast('Enviado');
+      }
+      return res;
+    } catch(err){
+      console.error('[Enxame v2.8.1] sendImagemInstant falhou:', err);
+      if(err.mayHaveSent){
+        toast(`Erro [${err.code || 'SEND_ERROR'}]: pode ter sido enviado; confira o chat antes de tentar de novo`);
+      } else {
+        toast(`Erro no envio de imagem [${err.code || 'SEND_ERROR'}]: ${err.message || String(err)}`);
+      }
+      throw err;
+    }
   }
 
-  async function sendVideoInstant(blob){
+  async function sendVideoInstant(blob, caption='', asDoc=false){
     closeModal();
-    const err = new Error('Envio de vídeo em implementação');
-    err.code = 'NOT_IMPLEMENTED';
-    toast('Envio de vídeo em implementação');
-    console.warn('[Enxame v2.8]', err.message);
-    throw err;
+    if(!blob){
+      const err = new Error('Nenhum arquivo de vídeo fornecido');
+      err.code = 'INVALID_BLOB';
+      toast('Nenhum vídeo selecionado');
+      throw err;
+    }
+    toast(asDoc ? 'Enviando vídeo como documento (original)...' : 'Enviando vídeo HD...');
+    try {
+      if(!window.EnxameDomSender){
+        const err = new Error('Módulo EnxameDomSender não carregado');
+        err.code = 'DOM_SENDER_NOT_FOUND';
+        throw err;
+      }
+      const res = await window.EnxameDomSender.send({
+        kind: 'video',
+        blob,
+        asDocument: !!asDoc,
+        caption: caption || ''
+      });
+
+      if(res.strategy === 'MENU_INTERCEPT_DOCUMENT' && res.ok){
+        toast('Documento enviado (original)');
+      } else if(res.stage === 'sent' && res.verified){
+        toast('Enviado');
+      } else if(!res.verified){
+        toast('Enviado, mas o status não foi confirmado');
+      } else {
+        toast('Enviado');
+      }
+      return res;
+    } catch(err){
+      console.error('[Enxame v2.8.1] sendVideoInstant falhou:', err);
+      if(err.mayHaveSent){
+        toast(`Erro [${err.code || 'SEND_ERROR'}]: pode ter sido enviado; confira o chat antes de tentar de novo`);
+      } else {
+        toast(`Erro no envio de vídeo [${err.code || 'SEND_ERROR'}]: ${err.message || String(err)}`);
+      }
+      throw err;
+    }
   }
 
   // ===== BACKUP =====
@@ -247,7 +315,8 @@
       await ensureDB();
       const funil=await idbGet('funis', funnelId);
       if(!funil){ toast('Funil não encontrado'); return; }
-      const sorted=[...funil.nodes].sort((a,b)=>(a.ordem||0)-(b.ordem||0));
+      const sorted=[...(funil.nodes||[])].sort((a,b)=>(a.ordem||0)-(b.ordem||0));
+      if(!sorted.length){ toast('Funil sem mensagens cadastradas'); return; }
       toast(`Disparando ${funil.nome} - ${sorted.length} passos`);
       for(let i=0;i<sorted.length;i++){
         const node=sorted[i];
@@ -267,20 +336,26 @@
           }
           else if(node.tipo==='imagem'){
             const m=await idbGet('imagens', node.mediaId);
-            await sendImagemInstant(m?.blob, node.asDocument);
+            if(!m?.blob) throw new Error('Imagem não encontrada no banco');
+            await sendImagemInstant(m.blob, !!node.asDocument, node.legenda || '');
           }
           else if(node.tipo==='video'){
             const m=await idbGet('videos', node.mediaId);
-            await sendVideoInstant(m?.blob);
+            if(!m?.blob) throw new Error('Vídeo não encontrado no banco');
+            await sendVideoInstant(m.blob, node.legenda || '', !!node.asDocument);
           }
         } catch(stepErr){
-          toast(`Disparo interrompido no passo ${i+1}: ${stepErr.message}`);
-          throw stepErr;
+          const code = stepErr.code || 'STEP_FAILED';
+          const mayHaveSentAlert = stepErr.mayHaveSent ? ' (pode ter sido enviado; confira o chat antes de tentar de novo)' : '';
+          toast(`Disparo interrompido no passo ${i+1} [${code}]: ${stepErr.message}${mayHaveSentAlert}`);
+          console.error(`[Enxame v2.8.1] Disparo interrompido no passo ${i+1}:`, stepErr);
+          return; // Interrompe no primeiro erro, sem retentar sozinho
         }
       }
       toast(`Funil ${funil.nome} concluído com sucesso`);
     } catch(e){
-      console.error('[Enxame v2.8] Erro no funil:', e);
+      console.error('[Enxame v2.8.1] Erro no funil:', e);
+      toast(`Erro ao disparar funil: ${e.message || String(e)}`);
     }
   }
 
