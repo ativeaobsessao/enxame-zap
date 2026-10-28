@@ -214,7 +214,7 @@
 
       return res;
     } catch(err){
-      console.error('[Enxame v2.8.2] sendImagemInstant falhou:', err);
+      console.error('[Enxame v2.8.3] sendImagemInstant falhou:', err);
       if(err.mayHaveSent){
         toast(`Erro [${err.code || 'SEND_ERROR'}]: pode ter sido enviado; confira o chat antes de tentar de novo`);
       } else {
@@ -262,7 +262,7 @@
 
       return res;
     } catch(err){
-      console.error('[Enxame v2.8.2] sendVideoInstant falhou:', err);
+      console.error('[Enxame v2.8.3] sendVideoInstant falhou:', err);
       if(err.mayHaveSent){
         toast(`Erro [${err.code || 'SEND_ERROR'}]: pode ter sido enviado; confira o chat antes de tentar de novo`);
       } else {
