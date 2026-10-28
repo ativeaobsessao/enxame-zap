@@ -184,7 +184,7 @@
       toast('Nenhuma imagem selecionada');
       throw err;
     }
-    toast(asDoc ? 'Enviando imagem como documento (original)...' : 'Enviando imagem HD...');
+    toast('Enviando...');
     try {
       if(!window.EnxameDomSender){
         const err = new Error('Módulo EnxameDomSender não carregado');
@@ -200,16 +200,21 @@
 
       if(res.strategy === 'MENU_INTERCEPT_DOCUMENT' && res.ok){
         toast('Documento enviado (original)');
-      } else if(res.stage === 'sent' && res.verified){
-        toast('Enviado');
-      } else if(!res.verified){
-        toast('Enviado, mas o status não foi confirmado');
       } else {
         toast('Enviado');
       }
+
+      if(res.confirmed && typeof res.confirmed.then === 'function'){
+        res.confirmed.then((conf)=>{
+          if(conf && !conf.verified){
+            toast('Enviado, status ainda não confirmado');
+          }
+        }).catch(()=>{});
+      }
+
       return res;
     } catch(err){
-      console.error('[Enxame v2.8.1] sendImagemInstant falhou:', err);
+      console.error('[Enxame v2.8.2] sendImagemInstant falhou:', err);
       if(err.mayHaveSent){
         toast(`Erro [${err.code || 'SEND_ERROR'}]: pode ter sido enviado; confira o chat antes de tentar de novo`);
       } else {
@@ -227,7 +232,7 @@
       toast('Nenhum vídeo selecionado');
       throw err;
     }
-    toast(asDoc ? 'Enviando vídeo como documento (original)...' : 'Enviando vídeo HD...');
+    toast('Enviando...');
     try {
       if(!window.EnxameDomSender){
         const err = new Error('Módulo EnxameDomSender não carregado');
@@ -243,16 +248,21 @@
 
       if(res.strategy === 'MENU_INTERCEPT_DOCUMENT' && res.ok){
         toast('Documento enviado (original)');
-      } else if(res.stage === 'sent' && res.verified){
-        toast('Enviado');
-      } else if(!res.verified){
-        toast('Enviado, mas o status não foi confirmado');
       } else {
         toast('Enviado');
       }
+
+      if(res.confirmed && typeof res.confirmed.then === 'function'){
+        res.confirmed.then((conf)=>{
+          if(conf && !conf.verified){
+            toast('Enviado, status ainda não confirmado');
+          }
+        }).catch(()=>{});
+      }
+
       return res;
     } catch(err){
-      console.error('[Enxame v2.8.1] sendVideoInstant falhou:', err);
+      console.error('[Enxame v2.8.2] sendVideoInstant falhou:', err);
       if(err.mayHaveSent){
         toast(`Erro [${err.code || 'SEND_ERROR'}]: pode ter sido enviado; confira o chat antes de tentar de novo`);
       } else {
