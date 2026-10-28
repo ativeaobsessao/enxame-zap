@@ -1,5 +1,4 @@
-
-/* Enxame Zap v2.1 - PTT Perfeito ZapVoice + Lixeira Obrigatória - 48kHz mono 128k Gain 3.5x + loudnorm */
+/* Enxame Zap v2.9.0 - PTT Perfeito ZapVoice - OGG/Opus Real 48kHz mono normalizado */
 (function(){
   const DB_NAME='enxame_zap_db';
   const DB_VERSION=3;
@@ -101,11 +100,11 @@
       window.EnxameBridge.request('ping', {}, { timeoutMs: 5000 })
         .then(res => {
           const caps = res.data?.capabilities || {};
-          console.log('%c[Enxame v2.8] MAIN world respondeu ping:', 'background:#30d158;color:#fff;padding:3px 8px;border-radius:999px;font-weight:600', caps);
+          console.log('%c[Enxame v2.9] MAIN world respondeu ping:', 'background:#30d158;color:#fff;padding:3px 8px;border-radius:999px;font-weight:600', caps);
           updateWPPDot();
         })
         .catch(e => {
-          console.warn('[Enxame v2.8] Ping inicial MAIN world:', e.message);
+          console.warn('[Enxame v2.9] Ping inicial MAIN world:', e.message);
         });
     } catch(e){ console.warn('injectMainWorld fail', e); }
   }
@@ -135,14 +134,40 @@
     throw err;
   }
 
-  // ===== ENVIO ÁUDIO PTT PERFEITO v2.8 - VIA ENXAME BRIDGE CLIENT =====
+  // ===== ENVIO ÁUDIO PTT PERFEITO v2.9 - VIA ENXAME BRIDGE CLIENT =====
   async function sendAudioHQInstant(blobOrItem){
-    let blob = blobOrItem?.blob || blobOrItem;
-    let preWaveform = blobOrItem?.waveform;
-    let preDuration = blobOrItem?.duration;
-    let preIsWebM = blobOrItem?.isWebM || (blob.type && blob.type.includes('webm'));
+    let item = (blobOrItem && blobOrItem.blob) ? blobOrItem : null;
+    let blob = item ? item.blob : blobOrItem;
+    let preWaveform = item?.waveform;
+    let preDuration = item?.duration;
+    let preIsWebM = item?.isWebM || (blob?.type && blob.type.includes('webm'));
+
+    // Migração sob demanda (lazy migration): atualiza itens legados para schema: 2 e OGG/Opus real
+    if(item && item.id && (item.schema !== 2 || item.format !== 'ogg-opus' || preIsWebM)){
+      try {
+        if(window.EnxameAudioPipeline?.processFileForPTT){
+          toast('Atualizando áudio para OGG/Opus real...');
+          const processed = await window.EnxameAudioPipeline.processFileForPTT(blob);
+          item.blob = processed.blob;
+          item.waveform = processed.waveform;
+          item.duration = processed.duration;
+          item.format = 'ogg-opus';
+          item.schema = 2;
+          item.isWebM = false;
+          item.updatedAt = Date.now();
+          await idbPut('audios', item);
+          blob = item.blob;
+          preWaveform = item.waveform;
+          preDuration = item.duration;
+          preIsWebM = false;
+        }
+      } catch(mErr){
+        console.warn('[Enxame][Audio] Falha na migração sob demanda:', mErr);
+      }
+    }
+
     closeModal();
-    toast('Enviando PTT ZapVoice v2.8...');
+    toast('Enviando PTT ZapVoice v2.9...');
     
     try {
       if(!window.EnxameBridge){
@@ -154,7 +179,7 @@
       const arrayBuffer = await blob.arrayBuffer();
       const res = await window.EnxameBridge.request('send_media', {
         buffer: arrayBuffer,
-        mime: blob.type,
+        mime: blob.type || 'audio/ogg; codecs=opus',
         waveform: preWaveform || true,
         duration: preDuration || 5,
         isWebM: !!preIsWebM
@@ -167,10 +192,10 @@
         }
       });
 
-      toast('Áudio PTT perfeito enviado • ZapVoice 48kHz mono 128k • sem encaminhado');
+      toast('Áudio PTT perfeito enviado • OGG/Opus 48 kHz mono • volume normalizado');
       return { ok: true, strategy: res.strategy, stage: res.stage, ms: res.ms };
     } catch(e){
-      console.error('[Enxame v2.8] sendAudioHQInstant falhou:', e);
+      console.error('[Enxame v2.9] sendAudioHQInstant falhou:', e);
       toast('Erro envio PTT: ' + (e.message || String(e)));
       throw e;
     }
@@ -359,7 +384,7 @@
           const mayHaveSentAlert = stepErr.mayHaveSent ? ' (pode ter sido enviado; confira o chat antes de tentar de novo)' : '';
           toast(`Disparo interrompido no passo ${i+1} [${code}]: ${stepErr.message}${mayHaveSentAlert}`);
           console.error(`[Enxame v2.8.1] Disparo interrompido no passo ${i+1}:`, stepErr);
-          return; // Interrompe no primeiro erro, sem retentar sozinho
+          return;
         }
       }
       toast(`Funil ${funil.nome} concluído com sucesso`);
@@ -383,7 +408,7 @@
       console.log('[Enxame] hidden file selected', type, editingId, file.name, file.size);
       try {
         if(type==='audio'){
-          toast('Processando áudio para PTT perfeito ZapVoice 48kHz 128k...');
+          toast('Processando áudio para OGG/Opus 48 kHz mono normalizado...');
           let processed = file;
           let waveform=null, duration=null;
           if(window.EnxameAudioPipeline?.processFileForPTT){
@@ -399,7 +424,7 @@
             const previewEl=$('#enxame-form-file-preview');
             if(previewEl){
               const url=URL.createObjectURL(processed);
-              previewEl.innerHTML=`<audio controls src="${url}" style="width:100%;height:40px"></audio><div style="font-size:11px;color:#86868b;margin-top:6px">${escapeHtml(file.name)} • ${(processed.size/1024).toFixed(0)} KB • OGG Opus 48kHz mono 128k • ${duration?duration+'s':''} • PTT perfeito</div><div class="enxame-card-audio-wave" style="margin-top:8px">${(waveform||Array(18).fill(20)).slice(0,18).map(v=>`<div class="enxame-wave-bar" style="height:${4+ (v/100)*22}px"></div>`).join('')}</div>`;
+              previewEl.innerHTML=`<audio controls src="${url}" style="width:100%;height:40px"></audio><div style="font-size:11px;color:#86868b;margin-top:6px">${escapeHtml(file.name)} • ${(processed.size/1024).toFixed(0)} KB • OGG/Opus 48 kHz mono • volume normalizado • ${duration?duration+'s':''} • PTT perfeito</div><div class="enxame-card-audio-wave" style="margin-top:8px">${(waveform||Array(18).fill(20)).slice(0,18).map(v=>`<div class="enxame-wave-bar" style="height:${4+ (v/100)*22}px"></div>`).join('')}</div>`;
             }
             toast('Áudio PTT perfeito carregado - clique Salvar');
           } else {
@@ -539,7 +564,7 @@
     if(type==='funis'){
       toolbar.innerHTML=`<button class="enxame-btn enxame-btn-secondary enxame-btn-small" id="btn-export-all">📦 Exportar Tudo</button><label class="enxame-btn enxame-btn-secondary enxame-btn-small" style="cursor:pointer">📥 Importar<input type="file" id="import-funil" accept=".json,.zip,.enxame.zip" hidden></label><button class="enxame-btn enxame-btn-primary enxame-btn-small" id="btn-new-funil">+ Novo Funil</button>`;
     } else if(type==='audio'){
-      toolbar.innerHTML=`<button class="enxame-btn enxame-btn-primary enxame-btn-small" id="btn-add-${type}">📁 Importar áudio (vira PTT ZapVoice)</button><button class="enxame-btn enxame-btn-secondary enxame-btn-small" id="btn-record-${type}">🔴 Gravar HQ 48kHz 128k</button>`;
+      toolbar.innerHTML=`<button class="enxame-btn enxame-btn-primary enxame-btn-small" id="btn-add-${type}">📁 Importar áudio (OGG/Opus real)</button><button class="enxame-btn enxame-btn-secondary enxame-btn-small" id="btn-record-${type}">🔴 Gravar PTT 48 kHz</button>`;
     } else {
       toolbar.innerHTML=`<button class="enxame-btn enxame-btn-primary enxame-btn-small" id="btn-add-${type}">+ Adicionar ${getTitle(type)}</button>`;
     }
@@ -574,7 +599,7 @@
   }
   function closeModal(){
     if(currentRecording){
-      try { currentRecording.recorder?.stop(); currentRecording.stream?.getTracks().forEach(t=>t.stop()); currentRecording.originalStream?.getTracks().forEach(t=>t.stop()); } catch {}
+      try { if(currentRecording.dispose) currentRecording.dispose(); else currentRecording.recorder?.stop(); } catch {}
       currentRecording=null;
     }
     if(recordingTimerInt){ clearInterval(recordingTimerInt); recordingTimerInt=null; }
@@ -584,7 +609,7 @@
     const m=$('#enxame-delete-modal'); if(m) m.remove();
   }
   function getTitle(t){ const m={audio:'Áudios PTT ZapVoice', texto:'Textos', imagem:'Imagens HD', video:'Vídeos HD', funis:'Seus Funis'}; return m[t]||t; }
-  function getSubtitle(t){ const m={audio:'ZapVoice tech • OGG Opus 48kHz mono 128k • Gain 3.5x + loudnorm • Waveform 64 • PTT nativo', texto:'Use {{nome}} para personalizar • envio instantâneo • editável', imagem:'Resolução original • sem compressão • lightbox HD • editável', video:'Resolução original • envio 1 clique • editável', funis:'Funis com quadrados ligáveis • export .enxame.zip'}; return m[t]||''; }
+  function getSubtitle(t){ const m={audio:'OGG/Opus 48 kHz mono • volume normalizado (-16 dBFS) • Waveform real 64 barras • PTT nativo', texto:'Use {{nome}} para personalizar • envio instantâneo • editável', imagem:'Resolução original • sem compressão • lightbox HD • editável', video:'Resolução original • envio 1 clique • editável', funis:'Funis com quadrados ligáveis • export .enxame.zip'}; return m[t]||''; }
 
   // ===== FORMS =====
   function openTextForm(existingItem){
@@ -628,7 +653,6 @@
     const body=$('#enxame-modal-body'); if(!body) return;
     const isEdit=!!existingItem;
     const file=pendingFile || existingItem?.blob || null;
-    const nomeBase= existingItem?.nome || suggestedName || file?.name || `${type}_${Date.now()}`;
     let previewHtml='';
     if(file){
       try {
@@ -636,7 +660,7 @@
         if(type==='audio'){
           const wf = preWaveform || existingItem?.waveform;
           const dur = preDuration || existingItem?.duration || '';
-          previewHtml=`<div id="enxame-form-file-preview" class="enxame-form-file-preview"><audio controls src="${url}" style="width:100%;height:40px"></audio><div style="font-size:11px;color:#86868b;margin-top:6px">${escapeHtml(file.name||'áudio PTT')} • ${(file.size/1024).toFixed(0)} KB • OGG Opus 48kHz mono 128k CBR • ${dur?dur+'s •':''} PTT ZapVoice</div>${wf?`<div class="enxame-card-audio-wave" style="margin-top:10px">${wf.slice(0,24).map(v=>`<div class="enxame-wave-bar" style="height:${4+ (v/100)*24}px"></div>`).join('')}</div><div style="font-size:10px;color:#30d158;margin-top:4px;font-weight:700">✓ Waveform ${wf.length} barras • PTT nativo sem encaminhado</div>`:''}</div>`;
+          previewHtml=`<div id="enxame-form-file-preview" class="enxame-form-file-preview"><audio controls src="${url}" style="width:100%;height:40px"></audio><div style="font-size:11px;color:#86868b;margin-top:6px">${escapeHtml(file.name||'áudio PTT')} • ${(file.size/1024).toFixed(0)} KB • OGG/Opus 48 kHz mono • volume normalizado • ${dur?dur+'s •':''} PTT ZapVoice</div>${wf?`<div class="enxame-card-audio-wave" style="margin-top:10px">${wf.slice(0,24).map(v=>`<div class="enxame-wave-bar" style="height:${4+ (v/100)*24}px"></div>`).join('')}</div><div style="font-size:10px;color:#30d158;margin-top:4px;font-weight:700">✓ Waveform real ${wf.length} barras • PTT nativo sem encaminhado</div>`:''}</div>`;
         } else if(type==='imagem') previewHtml=`<div id="enxame-form-file-preview" class="enxame-form-file-preview"><img src="${url}" style="width:100%;max-height:180px;object-fit:cover;border-radius:12px"><div style="font-size:11px;color:#86868b;margin-top:6px">${escapeHtml(file.name||'imagem')}</div></div>`;
         else if(type==='video') previewHtml=`<div id="enxame-form-file-preview" class="enxame-form-file-preview"><video src="${url}" controls muted style="width:100%;max-height:180px;border-radius:12px"></video><div style="font-size:11px;color:#86868b;margin-top:6px">${escapeHtml(file.name||'vídeo')}</div></div>`;
       } catch {}
@@ -658,7 +682,7 @@
           <button class="enxame-btn enxame-btn-secondary" id="enxame-form-cancel" style="flex:1">Cancelar</button>
           <button class="enxame-btn enxame-btn-primary" id="enxame-form-save" style="flex:1">${isEdit?'Salvar alterações':'Salvar em alta'}</button>
         </div>
-        ${type==='audio'?`<div style="margin-top:14px;background:#f0fdf4;border:0.5px solid #bbf7d0;border-radius:12px;padding:10px 12px"><div style="font-size:11px;font-weight:700;color:#15803d">✓ ZapVoice tech v2.1 - PTT Perfeito</div><div style="font-size:11px;color:#166534;margin-top:3px;line-height:1.35">48kHz mono • 128k CBR • Gain 3.5x + Compressor + loudnorm -16dB • Waveform 64 barras • Envio como se gravado agora • Sem arquivo não suportado • Sem encaminhada • iOS/Android 1x/2x OK</div></div>`:''}
+        ${type==='audio'?`<div style="margin-top:14px;background:#f0fdf4;border:0.5px solid #bbf7d0;border-radius:12px;padding:10px 12px"><div style="font-size:11px;font-weight:700;color:#15803d">✓ Enxame Zap v2.9 - PTT Real OGG/Opus</div><div style="font-size:11px;color:#166534;margin-top:3px;line-height:1.35">48 kHz mono • Volume normalizado (-16 dBFS) com limitador • Waveform real 64 barras • Duração exata • Sem distorção • Compatível iOS/Android 1x/1.5x/2x</div></div>`:''}
       </div>
     `;
     window._enxamePendingEditForm={ id: existingItem?.id || null, type, pendingFile: file, existingItem, waveform: preWaveform || existingItem?.waveform, duration: preDuration || existingItem?.duration };
@@ -686,7 +710,17 @@
         await ensureDB();
         const map={audio:'audios', imagem:'imagens', video:'videos'};
         const store=map[type];
-        const obj={ id: existingItem?.id || uid(), nome, blob: finalFile, waveform: state?.waveform || preWaveform, duration: state?.duration || preDuration, createdAt: existingItem?.createdAt || Date.now(), updatedAt: Date.now() };
+        const obj={
+          id: existingItem?.id || uid(),
+          nome,
+          blob: finalFile,
+          waveform: state?.waveform || preWaveform,
+          duration: state?.duration || preDuration,
+          schema: type === 'audio' ? 2 : (existingItem?.schema || 1),
+          format: type === 'audio' ? 'ogg-opus' : (existingItem?.format || type),
+          createdAt: existingItem?.createdAt || Date.now(),
+          updatedAt: Date.now()
+        };
         await idbPut(store, obj);
         toast(isEdit ? `${getTitle(type)} atualizado` : `${getTitle(type)} salvo ZapVoice`);
         window._enxamePendingEditForm=null;
@@ -699,7 +733,7 @@
     };
   }
 
-  // ===== DELETE CONFIRM MODAL - LIXEIRA OBRIGATÓRIA v2.1 =====
+  // ===== DELETE CONFIRM MODAL - LIXEIRA OBRIGATÓRIA =====
   function openDeleteConfirmModal(itemId, itemType, itemName, storeName){
     closeDeleteModal();
     const overlay=document.createElement('div'); overlay.id='enxame-delete-modal';
@@ -735,11 +769,10 @@
     };
   }
 
-
-  // ===== RECORDER UI APPLE v2.2 FAST - ZapVoice sem Página sem resposta =====
+  // ===== RECORDER UI APPLE v2.9 =====
   function openProcessingModal(){
     const overlay=document.createElement('div'); overlay.id='enxame-processing-modal';
-    overlay.innerHTML=`<div class="enxame-processing-card"><div class="enxame-processing-spinner"></div><div class="enxame-processing-title">Finalizando gravação ZapVoice...</div><div class="enxame-processing-sub">Processamento rápido sem travar • &lt;800ms</div></div>`;
+    overlay.innerHTML=`<div class="enxame-processing-card"><div class="enxame-processing-spinner"></div><div class="enxame-processing-title">Codificando OGG/Opus 48 kHz...</div><div class="enxame-processing-sub">Normalização RMS a -16 dBFS • WebCodecs nativo</div></div>`;
     document.body.appendChild(overlay);
     return overlay;
   }
@@ -754,10 +787,10 @@
     body.innerHTML=`
       <div class="enxame-recorder">
         <div class="enxame-recorder-header">
-          <div style="display:flex;align-items:center;gap:8px"><div class="enxame-rec-dot"></div><span style="font-weight:700;font-size:13px">Gravando ZapVoice 48kHz 128k FAST</span></div>
+          <div style="display:flex;align-items:center;gap:8px"><div class="enxame-rec-dot"></div><span style="font-weight:700;font-size:13px">Gravando PTT OGG/Opus 48 kHz</span></div>
           <span id="enxame-rec-timer" style="font-variant-numeric:tabular-nums;font-weight:700">00:00</span>
         </div>
-        <div class="enxame-recorder-sub">Gain 3.5x + Compressor • Fale normal, volume ficará alto e fiel • Não trava mais</div>
+        <div class="enxame-recorder-sub">Microfone com AGC e cancelamento de ruído • Volume normalizado a -16 dBFS</div>
         <div class="enxame-recorder-wave" id="enxame-rec-wave">${Array(32).fill(0).map(()=>`<div class="enxame-rec-bar" style="height:6px"></div>`).join('')}</div>
         <div class="enxame-volume-area">
           <div class="enxame-volume-label"><span>Volume</span><span id="enxame-volume-pct">0%</span></div>
@@ -766,9 +799,9 @@
         </div>
         <div class="enxame-form-actions">
           <button class="enxame-btn enxame-btn-secondary" id="enxame-rec-cancel" style="flex:1">✕ Cancelar</button>
-          <button class="enxame-btn enxame-btn-primary" id="enxame-rec-stop" style="flex:1.3">⏹️ Parar (rápido)</button>
+          <button class="enxame-btn enxame-btn-primary" id="enxame-rec-stop" style="flex:1.3">⏹️ Parar gravação</button>
         </div>
-        <div style="margin-top:10px;background:#f0fdf4;border:0.5px solid #bbf7d0;border-radius:10px;padding:8px 10px"><div style="font-size:10px;font-weight:700;color:#15803d">✓ v2.2 FAST PATH - ZapVoice</div><div style="font-size:10px;color:#166534;margin-top:2px">Não faz re-encode pesado, envia WebM direto para WA-JS 4.7.1 converter • Sem Página sem resposta</div></div>
+        <div style="margin-top:10px;background:#f0fdf4;border:0.5px solid #bbf7d0;border-radius:10px;padding:8px 10px"><div style="font-size:10px;font-weight:700;color:#15803d">✓ v2.9 OGG/Opus Real</div><div style="font-size:10px;color:#166534;margin-top:2px">Codificação nativa WebCodecs • Duração exata e waveform calculada de amostras reais</div></div>
       </div>
     `;
     const waveEl=$('#enxame-rec-wave');
@@ -783,7 +816,7 @@
       const s=String(elapsed%60).padStart(2,'0');
       if(timerEl) timerEl.textContent=`${m}:${s}`;
       if(elapsed>=120){
-        toast('Limite 2min atingido - parando rápido');
+        toast('Limite 2min atingido - finalizando gravação');
         const stopBtn=$('#enxame-rec-stop'); if(stopBtn) stopBtn.click();
       }
     },200);
@@ -794,7 +827,7 @@
         if(pctEl) pctEl.textContent=`${vol}%`;
         if(vol<10){ fillEl.style.background='#86868b'; if(statusEl) statusEl.textContent='Muito baixo - chegue mais perto'; }
         else if(vol<30){ fillEl.style.background='#ff9f0a'; if(statusEl) statusEl.textContent='Baixo - fale mais alto'; }
-        else if(vol<70){ fillEl.style.background='#30d158'; if(statusEl) statusEl.textContent='Perfeito! Volume alto e fiel'; }
+        else if(vol<70){ fillEl.style.background='#30d158'; if(statusEl) statusEl.textContent='Perfeito! Volume ideal'; }
         else { fillEl.style.background='#30d158'; if(statusEl) statusEl.textContent='Excelente! ZapVoice'; }
         if(waveEl){
           const bars=waveEl.children;
@@ -805,15 +838,15 @@
           }
         }
       });
-      console.log('[Enxame v2.2] Gravação iniciada FAST', currentRecording);
+      console.log('[Enxame v2.9] Gravação iniciada OGG/Opus', currentRecording);
     } catch(e){
-      console.error('startRecording fail v2.2', e);
+      console.error('startRecording fail v2.9', e);
       body.innerHTML=`<div class="enxame-empty"><div class="enxame-empty-icon">🎙️</div><div class="enxame-empty-title">Erro microfone</div><div class="enxame-empty-sub">${escapeHtml(e.message)} - Permita microfone.</div><button class="enxame-btn enxame-btn-primary enxame-btn-small" style="margin-top:12px" onclick="location.reload()">Recarregar</button></div>`;
       return;
     }
 
     $('#enxame-rec-cancel').onclick=()=>{
-      try { currentRecording.recorder?.stop(); currentRecording.stream?.getTracks().forEach(t=>t.stop()); currentRecording.originalStream?.getTracks().forEach(t=>t.stop()); if(currentRecording.audioCtxVol) currentRecording.audioCtxVol.close(); if(currentRecording.audioCtx) currentRecording.audioCtx.close(); } catch {}
+      try { if(currentRecording?.dispose) currentRecording.dispose(); else currentRecording?.recorder?.stop(); } catch {}
       currentRecording=null;
       if(recordingTimerInt){ clearInterval(recordingTimerInt); recordingTimerInt=null; }
       toast('Gravação cancelada');
@@ -821,23 +854,23 @@
     };
     $('#enxame-rec-stop').onclick=async ()=>{
       const btn=$('#enxame-rec-stop');
-      if(btn){ btn.textContent='⏳ Finalizando...'; btn.disabled=true; }
+      if(btn){ btn.textContent='⏳ Codificando OGG/Opus...'; btn.disabled=true; }
       const processingModal = openProcessingModal();
       if(recordingTimerInt){ clearInterval(recordingTimerInt); recordingTimerInt=null; }
       try {
-        // v2.2 FAST PATH - stopFast resolve em <100ms, sem decode, sem travar
+        // Timeout generoso de pelo menos 30s
         const result = await Promise.race([
           currentRecording.stopFast(),
-          new Promise((_,rej)=>setTimeout(()=>rej(new Error('Timeout 2.5s - tente gravar <60s')), 2500))
+          new Promise((_,rej)=>setTimeout(()=>rej(new Error('Timeout 30s na codificação de áudio')), 35000))
         ]);
-        console.log('[Enxame v2.2] stopFast OK', result.blob.size, result.duration, 'isWebM', result.isWebM);
+        console.log('[Enxame v2.9] Gravação codificada com sucesso:', result.blob.size, 'bytes, dur=', result.duration);
         closeProcessingModal();
-        toast(`Áudio gravado ${result.duration}s • ZapVoice FAST`);
+        toast(`Áudio gravado ${result.duration}s • OGG/Opus 48 kHz`);
         openMediaForm('audio', null, result.blob, `Gravação ${new Date().toLocaleTimeString()}`, result.waveform, result.duration);
       } catch(e){
-        console.error('stopFast fail v2.2', e);
+        console.error('stopFast fail v2.9', e);
         closeProcessingModal();
-        toast('Erro ao finalizar: '+e.message+' - Tente gravar menos tempo');
+        toast('Erro ao finalizar gravação: '+e.message);
         renderModal('audio');
       } finally {
         currentRecording=null;
@@ -845,7 +878,6 @@
       }
     };
   }
-
 
   async function renderModal(type){
     const body=$('#enxame-modal-body'); if(!body) return;
@@ -878,7 +910,7 @@
     try {
       const items=await idbGetAll(store);
       if(!items.length){
-        body.innerHTML=`<div class="enxame-empty"><div class="enxame-empty-icon">${type==='audio'?'🎙️':type==='texto'?'📝':type==='imagem'?'🖼️':'🎬'}</div><div class="enxame-empty-title">Nenhum ${getTitle(type)} salvo</div><div class="enxame-empty-sub">${type==='audio'?'Grave em HQ 48kHz mono 128k ZapVoice com Gain 3.5x + loudnorm ou importe - tudo vira PTT perfeito.':'Clique em + Adicionar para salvar em resolução máxima. Depois edite nome e arquivo se precisar.'}</div></div>`;
+        body.innerHTML=`<div class="enxame-empty"><div class="enxame-empty-icon">${type==='audio'?'🎙️':type==='texto'?'📝':type==='imagem'?'🖼️':'🎬'}</div><div class="enxame-empty-title">Nenhum ${getTitle(type)} salvo</div><div class="enxame-empty-sub">${type==='audio'?'Grave ou importe áudios — convertidos automaticamente para OGG/Opus 48 kHz mono com volume normalizado e waveform real.':'Clique em + Adicionar para salvar em resolução máxima. Depois edite nome e arquivo se precisar.'}</div></div>`;
         return;
       }
       body.innerHTML='';
@@ -891,7 +923,7 @@
           const url=item.blob ? URL.createObjectURL(item.blob) : '';
           const wf=item.waveform||[];
           const waveHtml = wf.length ? `<div class="enxame-card-audio-wave">${wf.slice(0,18).map(v=>`<div class="enxame-wave-bar" style="height:${4+ (v/100)*20}px"></div>`).join('')}</div>` : `<div class="enxame-card-audio-wave">${Array(18).fill(0).map(()=>`<div class="enxame-wave-bar" style="height:${8+Math.random()*18}px"></div>`).join('')}</div>`;
-          contentHtml=`${waveHtml}<audio controls src="${url}" style="width:100%;height:40px"></audio><div class="enxame-card-meta">${escapeHtml(size)} • OGG Opus 48kHz mono 128k • ${item.duration?item.duration+'s •':''} ZapVoice • tocável</div>`;
+          contentHtml=`${waveHtml}<audio controls src="${url}" style="width:100%;height:40px"></audio><div class="enxame-card-meta">${escapeHtml(size)} • OGG/Opus 48 kHz mono • ${item.duration?item.duration+'s •':''} PTT ZapVoice • tocável</div>`;
         } else if(type==='texto'){
           const preview=(item.conteudo||'').slice(0,120);
           contentHtml=`<div class="enxame-card-text-preview">${escapeHtml(preview)}${(item.conteudo||'').length>120?'...':''}</div>`;
@@ -912,6 +944,7 @@
           </div>
           <div class="enxame-card-content">${contentHtml}</div>
           <div class="enxame-card-actions">
+            ${type==='audio'?`<button class="enxame-btn enxame-btn-secondary enxame-btn-small" data-download="${item.id}" title="Baixar arquivo .ogg">⬇ .ogg</button>`:''}
             <button class="enxame-btn enxame-btn-secondary enxame-btn-small" data-edit="${item.id}" style="flex:1">Editar</button>
             <button class="enxame-btn enxame-btn-primary enxame-btn-small" data-send="${item.id}" style="flex:1.3">▶ Enviar</button>
           </div>
@@ -919,6 +952,43 @@
         grid.appendChild(card);
       });
       body.appendChild(grid);
+
+      // Ações dos cards
+      body.querySelectorAll('[data-download]').forEach(btn=>{
+        btn.onclick=async ()=>{
+          const id=btn.dataset.download;
+          const item=await idbGet('audios', id);
+          if(!item || !item.blob){ toast('Áudio não encontrado'); return; }
+          let blobToDownload = item.blob;
+          if(item.schema !== 2 || item.format !== 'ogg-opus'){
+            try {
+              toast('Convertendo para OGG/Opus real...');
+              const processed = await window.EnxameAudioPipeline.processFileForPTT(item.blob);
+              item.blob = processed.blob;
+              item.waveform = processed.waveform;
+              item.duration = processed.duration;
+              item.format = 'ogg-opus';
+              item.schema = 2;
+              item.updatedAt = Date.now();
+              await idbPut('audios', item);
+              blobToDownload = item.blob;
+            } catch(e){
+              console.warn('[Enxame] Falha na conversão antes do download:', e);
+            }
+          }
+          const url=URL.createObjectURL(blobToDownload);
+          const a=document.createElement('a');
+          a.href=url;
+          const safeName=(item.nome||'audio').replace(/[/\\?%*:|"<>]/g, '_');
+          a.download=safeName.endsWith('.ogg') ? safeName : `${safeName}.ogg`;
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          setTimeout(()=>URL.revokeObjectURL(url), 10000);
+          toast('Download de '+a.download+' iniciado');
+        };
+      });
+
       body.querySelectorAll('[data-edit]').forEach(btn=>{
         btn.onclick=async ()=>{
           const id=btn.dataset.edit;
@@ -947,7 +1017,7 @@
             else if(type==='imagem') await sendImagemInstant(item.blob, false);
             else if(type==='video') await sendVideoInstant(item.blob);
           } catch(err){
-            console.warn('[Enxame v2.8] Falha ao enviar item:', err);
+            console.warn('[Enxame v2.9] Falha ao enviar item:', err);
           }
         };
       });
@@ -967,6 +1037,6 @@
     setInterval(()=>{ ensurePillsBar(); updateBadges(); }, 2500);
     setInterval(()=>{ updateWPPDot(); }, 5000);
     updateWPPDot();
-    console.log('%cEnxame Zap v2.8.0 ZapVoice - Ponte v1 + PTT Seguro','background:#1d1d1f;color:#fff;padding:8px 14px;border-radius:999px;font-weight:700');
+    console.log('%cEnxame Zap v2.9.0 ZapVoice - OGG/Opus Real + PTT Seguro','background:#1d1d1f;color:#fff;padding:8px 14px;border-radius:999px;font-weight:700');
   })();
 })();
