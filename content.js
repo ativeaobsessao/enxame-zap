@@ -1,4 +1,4 @@
-/* Enxame Zap v2.9.0 - PTT Perfeito ZapVoice - OGG/Opus Real 48kHz mono normalizado */
+/* Enxame Zap v2.9.1 - Interface Apple Simplificada */
 (function(){
   const DB_NAME='enxame_zap_db';
   const DB_VERSION=3;
@@ -10,11 +10,11 @@
   function toast(msg){
     let t=$('#enxame-toast'); if(t) t.remove();
     t=document.createElement('div'); t.id='enxame-toast'; t.className='enxame-toast'; t.textContent=msg;
-    document.body.appendChild(t); setTimeout(()=>{ if(t && t.parentNode) t.remove(); }, 4000);
+    document.body.appendChild(t); setTimeout(()=>{ if(t && t.parentNode) t.remove(); }, 3500);
   }
   function escapeHtml(str){ return (str||'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
 
-  // ===== IndexedDB robusto =====
+  // ===== IndexedDB =====
   function openDB(){
     if(dbReadyPromise) return dbReadyPromise;
     dbReadyPromise = new Promise((res, rej)=>{
@@ -29,13 +29,13 @@
           if(!d.objectStoreNames.contains('funis')) d.createObjectStore('funis',{keyPath:'id'});
         };
         req.onsuccess=()=>{ db=req.result; db.onclose=()=>{ db=null; dbReadyPromise=null; }; res(db); };
-        req.onerror=()=>{ console.error('IDB open error', req.error); dbReadyPromise=null; rej(req.error); };
-        req.onblocked=()=>{ console.warn('IDB blocked'); };
+        req.onerror=()=>{ dbReadyPromise=null; rej(req.error); };
+        req.onblocked=()=>{};
       } catch(err){ dbReadyPromise=null; rej(err); }
     });
     return dbReadyPromise;
   }
-  async function ensureDB(){ if(db) return db; try { return await openDB(); } catch(e){ console.error('ensureDB fail', e); throw e; } }
+  async function ensureDB(){ if(db) return db; try { return await openDB(); } catch(e){ throw e; } }
   async function idbPut(store, obj){
     await ensureDB();
     return new Promise((res,rej)=>{
@@ -98,22 +98,16 @@
     try {
       if(!window.EnxameBridge) return;
       window.EnxameBridge.request('ping', {}, { timeoutMs: 5000 })
-        .then(res => {
-          const caps = res.data?.capabilities || {};
-          console.log('%c[Enxame v2.9] MAIN world respondeu ping:', 'background:#30d158;color:#fff;padding:3px 8px;border-radius:999px;font-weight:600', caps);
-          updateWPPDot();
-        })
-        .catch(e => {
-          console.warn('[Enxame v2.9] Ping inicial MAIN world:', e.message);
-        });
-    } catch(e){ console.warn('injectMainWorld fail', e); }
+        .then(() => { updateWPPDot(); })
+        .catch(() => {});
+    } catch(e){}
   }
 
   // ===== ENVIO TEXTO =====
   async function sendTextoInstant(text){
     const final=replaceVars(text);
     closeModal();
-    toast('Enviando texto...');
+    toast('Enviando...');
     try {
       const sels=['div[contenteditable="true"][data-tab="10"]','div[contenteditable="true"][data-lexical-editor="true"]','footer div[contenteditable="true"]','[data-testid="conversation-compose-box-input"]'];
       let input=null; for(const sel of sels){ input=document.querySelector(sel); if(input) break; }
@@ -124,17 +118,17 @@
         await new Promise(r=>setTimeout(r, 90));
         const btn=document.querySelector('[data-testid="compose-btn-send"]') || document.querySelector('span[data-icon="send"]')?.closest('button') || document.querySelector('button[aria-label="Enviar"]');
         if(btn) btn.click(); else { input.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',code:'Enter',keyCode:13,bubbles:true})); }
-        toast('Texto enviado • 1 clique');
+        toast('Enviado');
         return { ok: true, strategy: 'DOM' };
       }
-    } catch(e){ console.warn('DOM send fail', e); }
-    const err = new Error('Erro ao enviar - abra o chat do lead');
-    err.code = 'TEXT_SEND_FAILED';
+    } catch(e){}
+    const err = new Error('Abra uma conversa para enviar (NO_CHAT_OPEN)');
+    err.code = 'NO_CHAT_OPEN';
     toast(err.message);
     throw err;
   }
 
-  // ===== ENVIO ÁUDIO PTT PERFEITO v2.9 - VIA ENXAME BRIDGE CLIENT =====
+  // ===== ENVIO ÁUDIO =====
   async function sendAudioHQInstant(blobOrItem){
     let item = (blobOrItem && blobOrItem.blob) ? blobOrItem : null;
     let blob = item ? item.blob : blobOrItem;
@@ -142,11 +136,10 @@
     let preDuration = item?.duration;
     let preIsWebM = item?.isWebM || (blob?.type && blob.type.includes('webm'));
 
-    // Migração sob demanda (lazy migration): atualiza itens legados para schema: 2 e OGG/Opus real
     if(item && item.id && (item.schema !== 2 || item.format !== 'ogg-opus' || preIsWebM)){
       try {
         if(window.EnxameAudioPipeline?.processFileForPTT){
-          toast('Atualizando áudio para OGG/Opus real...');
+          toast('Processando...');
           const processed = await window.EnxameAudioPipeline.processFileForPTT(blob);
           item.blob = processed.blob;
           item.waveform = processed.waveform;
@@ -161,17 +154,15 @@
           preDuration = item.duration;
           preIsWebM = false;
         }
-      } catch(mErr){
-        console.warn('[Enxame][Audio] Falha na migração sob demanda:', mErr);
-      }
+      } catch(mErr){}
     }
 
     closeModal();
-    toast('Enviando PTT ZapVoice v2.9...');
+    toast('Enviando...');
     
     try {
       if(!window.EnxameBridge){
-        const err = new Error('Ponte EnxameBridge não carregada');
+        const err = new Error('Ponte não conectada (BRIDGE_NOT_FOUND)');
         err.code = 'BRIDGE_NOT_FOUND';
         throw err;
       }
@@ -185,18 +176,16 @@
         isWebM: !!preIsWebM
       }, {
         timeoutMs: 25000,
-        onProgress: (stage) => {
-          if(stage === 'RESOLVING_CHAT') toast('Verificando chat ativo...');
-          else if(stage === 'PREPARING_MEDIA') toast('Processando áudio PTT...');
-          else if(stage === 'SENDING') toast('Transmitindo áudio via ZapVoice...');
+        onProgress: () => {
+          toast('Enviando...');
         }
       });
 
-      toast('Áudio PTT perfeito enviado • OGG/Opus 48 kHz mono • volume normalizado');
+      toast('Enviado');
       return { ok: true, strategy: res.strategy, stage: res.stage, ms: res.ms };
     } catch(e){
-      console.error('[Enxame v2.9] sendAudioHQInstant falhou:', e);
-      toast('Erro envio PTT: ' + (e.message || String(e)));
+      const errCode = e.code || 'SEND_FAILED';
+      toast(`Erro ao enviar (${errCode})`);
       throw e;
     }
   }
@@ -204,15 +193,15 @@
   async function sendImagemInstant(blob, asDoc=false, caption=''){
     closeModal();
     if(!blob){
-      const err = new Error('Nenhum arquivo de imagem fornecido');
+      const err = new Error('Selecione uma imagem (INVALID_BLOB)');
       err.code = 'INVALID_BLOB';
-      toast('Nenhuma imagem selecionada');
+      toast(err.message);
       throw err;
     }
     toast('Enviando...');
     try {
       if(!window.EnxameDomSender){
-        const err = new Error('Módulo EnxameDomSender não carregado');
+        const err = new Error('Módulo de envio indisponível (DOM_SENDER_NOT_FOUND)');
         err.code = 'DOM_SENDER_NOT_FOUND';
         throw err;
       }
@@ -223,27 +212,23 @@
         caption: caption || ''
       });
 
-      if(res.strategy === 'MENU_INTERCEPT_DOCUMENT' && res.ok){
-        toast('Documento enviado (original)');
-      } else {
-        toast('Enviado');
-      }
+      toast('Enviado');
 
       if(res.confirmed && typeof res.confirmed.then === 'function'){
         res.confirmed.then((conf)=>{
           if(conf && !conf.verified){
-            toast('Enviado, status ainda não confirmado');
+            toast('Enviado');
           }
         }).catch(()=>{});
       }
 
       return res;
     } catch(err){
-      console.error('[Enxame v2.8.3] sendImagemInstant falhou:', err);
+      const code = err.code || 'SEND_ERROR';
       if(err.mayHaveSent){
-        toast(`Erro [${err.code || 'SEND_ERROR'}]: pode ter sido enviado; confira o chat antes de tentar de novo`);
+        toast(`Pode ter sido enviado (${code})`);
       } else {
-        toast(`Erro no envio de imagem [${err.code || 'SEND_ERROR'}]: ${err.message || String(err)}`);
+        toast(`Erro ao enviar (${code})`);
       }
       throw err;
     }
@@ -252,15 +237,15 @@
   async function sendVideoInstant(blob, caption='', asDoc=false){
     closeModal();
     if(!blob){
-      const err = new Error('Nenhum arquivo de vídeo fornecido');
+      const err = new Error('Selecione um vídeo (INVALID_BLOB)');
       err.code = 'INVALID_BLOB';
-      toast('Nenhum vídeo selecionado');
+      toast(err.message);
       throw err;
     }
     toast('Enviando...');
     try {
       if(!window.EnxameDomSender){
-        const err = new Error('Módulo EnxameDomSender não carregado');
+        const err = new Error('Módulo de envio indisponível (DOM_SENDER_NOT_FOUND)');
         err.code = 'DOM_SENDER_NOT_FOUND';
         throw err;
       }
@@ -271,27 +256,23 @@
         caption: caption || ''
       });
 
-      if(res.strategy === 'MENU_INTERCEPT_DOCUMENT' && res.ok){
-        toast('Documento enviado (original)');
-      } else {
-        toast('Enviado');
-      }
+      toast('Enviado');
 
       if(res.confirmed && typeof res.confirmed.then === 'function'){
         res.confirmed.then((conf)=>{
           if(conf && !conf.verified){
-            toast('Enviado, status ainda não confirmado');
+            toast('Enviado');
           }
         }).catch(()=>{});
       }
 
       return res;
     } catch(err){
-      console.error('[Enxame v2.8.3] sendVideoInstant falhou:', err);
+      const code = err.code || 'SEND_ERROR';
       if(err.mayHaveSent){
-        toast(`Erro [${err.code || 'SEND_ERROR'}]: pode ter sido enviado; confira o chat antes de tentar de novo`);
+        toast(`Pode ter sido enviado (${code})`);
       } else {
-        toast(`Erro no envio de vídeo [${err.code || 'SEND_ERROR'}]: ${err.message || String(err)}`);
+        toast(`Erro ao enviar (${code})`);
       }
       throw err;
     }
@@ -302,7 +283,7 @@
     try {
       await ensureDB();
       const funis=funnelId ? [await idbGet('funis', funnelId)].filter(Boolean) : await idbGetAll('funis');
-      if(!funis.length){ toast('Nenhum funil para exportar'); return; }
+      if(!funis.length){ toast('Nenhum funil encontrado (EMPTY)'); return; }
       const zip=new JSZip();
       if(funnelId){
         const funil=funis[0];
@@ -318,41 +299,41 @@
         }
         const blob=await zip.generateAsync({type:'blob'});
         const url=URL.createObjectURL(blob);
-        const a=document.createElement('a'); a.href=url; a.download=`enxame_funil_${funil.nome.replace(/\s+/g,'_')}_v1.enxame.zip`; document.body.appendChild(a); a.click(); a.remove();
+        const a=document.createElement('a'); a.href=url; a.download=`funil_${funil.nome.replace(/\s+/g,'_')}.zip`; document.body.appendChild(a); a.click(); a.remove();
         setTimeout(()=>URL.revokeObjectURL(url), 10000);
-        toast(`Backup ${funil.nome} baixado`);
+        toast('Download iniciado');
       } else {
         for(const funil of funis) zip.file(`funis/${funil.nome.replace(/\s+/g,'_')}.json`, JSON.stringify(funil,null,2));
         const audios=await idbGetAll('audios'); const imgs=await idbGetAll('imagens'); const vids=await idbGetAll('videos');
         [...audios,...imgs,...vids].forEach(m=>{ if(m.blob) zip.file(`midias_geral/${m.id}_${(m.nome||'media').replace(/\s+/g,'_')}`, m.blob); });
         const blob=await zip.generateAsync({type:'blob'});
         const url=URL.createObjectURL(blob);
-        const a=document.createElement('a'); a.href=url; a.download=`enxame_backup_completo_${new Date().toISOString().slice(0,10)}.zip`; document.body.appendChild(a); a.click(); a.remove();
+        const a=document.createElement('a'); a.href=url; a.download=`backup_${new Date().toISOString().slice(0,10)}.zip`; document.body.appendChild(a); a.click(); a.remove();
         setTimeout(()=>URL.revokeObjectURL(url),10000);
-        toast('Backup completo exportado');
+        toast('Download iniciado');
       }
-    } catch(e){ console.error(e); toast('Erro export: '+e.message); }
+    } catch(e){ toast('Erro ao exportar (EXPORT_ERROR)'); }
   }
   async function importFunnelFromFile(file){
     try {
-      if(file.name.endsWith('.zip')){ toast('Para .zip, extraia o funil.json'); return; }
+      if(file.name.endsWith('.zip')){ toast('Extraia o arquivo antes de importar'); return; }
       const txt=await file.text();
       const data=JSON.parse(txt);
       const list=Array.isArray(data) ? data : (data.nodes ? [data] : data.funis || [data]);
       await ensureDB();
       for(const f of list){ if(!f.id) f.id=uid(); await idbPut('funis', f); }
-      toast(`${list.length} funil(is) importado(s)`);
+      toast('Importado');
       renderModal('funis');
-    } catch(e){ console.error(e); toast('Erro importar: '+e.message); }
+    } catch(e){ toast('Erro ao importar (IMPORT_ERROR)'); }
   }
   async function dispararFunil(funnelId){
     try {
       await ensureDB();
       const funil=await idbGet('funis', funnelId);
-      if(!funil){ toast('Funil não encontrado'); return; }
+      if(!funil){ toast('Funil não encontrado (NOT_FOUND)'); return; }
       const sorted=[...(funil.nodes||[])].sort((a,b)=>(a.ordem||0)-(b.ordem||0));
-      if(!sorted.length){ toast('Funil sem mensagens cadastradas'); return; }
-      toast(`Disparando ${funil.nome} - ${sorted.length} passos`);
+      if(!sorted.length){ toast('Funil sem mensagens (EMPTY)'); return; }
+      toast('Disparando funil...');
       for(let i=0;i<sorted.length;i++){
         const node=sorted[i];
         const delay=node.delay||(node.tipo==='audio'?2400:1200);
@@ -362,7 +343,7 @@
           if(node.tipo==='audio'){
             const m=await idbGet('audios', node.mediaId);
             if(m) await sendAudioHQInstant(m);
-            else throw new Error('Áudio não encontrado no banco');
+            else throw new Error('Áudio não encontrado');
           }
           else if(node.tipo==='texto'){
             const m=node.mediaId ? await idbGet('textos', node.mediaId) : null;
@@ -371,26 +352,23 @@
           }
           else if(node.tipo==='imagem'){
             const m=await idbGet('imagens', node.mediaId);
-            if(!m?.blob) throw new Error('Imagem não encontrada no banco');
+            if(!m?.blob) throw new Error('Imagem não encontrada');
             await sendImagemInstant(m.blob, !!node.asDocument, node.legenda || '');
           }
           else if(node.tipo==='video'){
             const m=await idbGet('videos', node.mediaId);
-            if(!m?.blob) throw new Error('Vídeo não encontrado no banco');
+            if(!m?.blob) throw new Error('Vídeo não encontrado');
             await sendVideoInstant(m.blob, node.legenda || '', !!node.asDocument);
           }
         } catch(stepErr){
           const code = stepErr.code || 'STEP_FAILED';
-          const mayHaveSentAlert = stepErr.mayHaveSent ? ' (pode ter sido enviado; confira o chat antes de tentar de novo)' : '';
-          toast(`Disparo interrompido no passo ${i+1} [${code}]: ${stepErr.message}${mayHaveSentAlert}`);
-          console.error(`[Enxame v2.8.1] Disparo interrompido no passo ${i+1}:`, stepErr);
+          toast(`Interrompido no passo ${i+1} (${code})`);
           return;
         }
       }
-      toast(`Funil ${funil.nome} concluído com sucesso`);
+      toast('Funil concluído');
     } catch(e){
-      console.error('[Enxame v2.8.1] Erro no funil:', e);
-      toast(`Erro ao disparar funil: ${e.message || String(e)}`);
+      toast('Erro no funil (FUNNEL_ERROR)');
     }
   }
 
@@ -405,10 +383,9 @@
       if(!file) return;
       const type=inp.dataset.type;
       const editingId=inp.dataset.editingId||null;
-      console.log('[Enxame] hidden file selected', type, editingId, file.name, file.size);
       try {
         if(type==='audio'){
-          toast('Processando áudio para OGG/Opus 48 kHz mono normalizado...');
+          toast('Processando...');
           let processed = file;
           let waveform=null, duration=null;
           if(window.EnxameAudioPipeline?.processFileForPTT){
@@ -424,9 +401,12 @@
             const previewEl=$('#enxame-form-file-preview');
             if(previewEl){
               const url=URL.createObjectURL(processed);
-              previewEl.innerHTML=`<audio controls src="${url}" style="width:100%;height:40px"></audio><div style="font-size:11px;color:#86868b;margin-top:6px">${escapeHtml(file.name)} • ${(processed.size/1024).toFixed(0)} KB • OGG/Opus 48 kHz mono • volume normalizado • ${duration?duration+'s':''} • PTT perfeito</div><div class="enxame-card-audio-wave" style="margin-top:8px">${(waveform||Array(18).fill(20)).slice(0,18).map(v=>`<div class="enxame-wave-bar" style="height:${4+ (v/100)*22}px"></div>`).join('')}</div>`;
+              const durStr = duration ? (String(duration).replace('.', ',') + ' s') : '';
+              const sizeStr = processed.size ? `${Math.round(processed.size / 1024)} KB` : '';
+              const metaStr = [durStr, sizeStr].filter(Boolean).join(' · ');
+              previewEl.innerHTML=`<audio controls src="${url}" style="width:100%;height:40px"></audio><div style="font-size:12px;color:#86868b;margin-top:6px">${escapeHtml(file.name)} · ${escapeHtml(metaStr)}</div><div class="enxame-card-audio-wave" style="margin-top:8px">${(waveform||Array(18).fill(20)).slice(0,18).map(v=>`<div class="enxame-wave-bar" style="height:${4+ (v/100)*22}px"></div>`).join('')}</div>`;
             }
-            toast('Áudio PTT perfeito carregado - clique Salvar');
+            toast('Carregado');
           } else {
             window._enxamePendingFile=processed;
             window._enxamePendingWaveform=waveform;
@@ -441,13 +421,13 @@
               if(previewEl){
                 if(type==='imagem'){
                   const url=URL.createObjectURL(file);
-                  previewEl.innerHTML=`<img src="${url}" style="width:100%;max-height:160px;object-fit:cover;border-radius:12px"><div style="font-size:11px;color:#86868b;margin-top:6px">${escapeHtml(file.name)}</div>`;
+                  previewEl.innerHTML=`<img src="${url}" style="width:100%;max-height:160px;object-fit:cover;border-radius:12px"><div style="font-size:12px;color:#86868b;margin-top:6px">${escapeHtml(file.name)}</div>`;
                 } else if(type==='video'){
                   const url=URL.createObjectURL(file);
-                  previewEl.innerHTML=`<video src="${url}" controls muted style="width:100%;max-height:160px;border-radius:12px"></video><div style="font-size:11px;color:#86868b;margin-top:6px">${escapeHtml(file.name)}</div>`;
+                  previewEl.innerHTML=`<video src="${url}" controls muted style="width:100%;max-height:160px;border-radius:12px"></video><div style="font-size:12px;color:#86868b;margin-top:6px">${escapeHtml(file.name)}</div>`;
                 }
               }
-              toast('Novo arquivo carregado - clique em Salvar alterações');
+              toast('Carregado');
             } else {
               await ensureDB();
               const map={audio:'audios', imagem:'imagens', video:'videos'};
@@ -457,7 +437,7 @@
                 existing.blob=file;
                 existing.updatedAt=Date.now();
                 await idbPut(store, existing);
-                toast('Arquivo substituído com sucesso');
+                toast('Salvo');
                 updateBadges();
                 renderModal(type);
               }
@@ -467,14 +447,14 @@
             openMediaForm(type, null, file);
           }
         }
-      } catch(err){ console.error(err); toast('Erro ao processar arquivo: '+err.message); }
+      } catch(err){ toast('Erro ao processar (FILE_ERROR)'); }
       inp.value='';
       delete inp.dataset.editingId;
     });
     return inp;
   }
 
-  // ===== Pills bar abaixo =====
+  // ===== Pills bar =====
   function ensurePillsBar(){
     if($('#enxame-pills-bar')) return;
     const footer=document.querySelector('footer') || document.querySelector('[data-testid="conversation-compose-box"]');
@@ -516,34 +496,29 @@
           if(el) el.textContent=all.length;
         } catch {}
       }
-    } catch(e){ console.warn('badges fail', e); }
+    } catch(e){}
   }
   async function updateWPPDot(){
     const dot=$('#enxame-wpp-dot'); if(!dot) return;
     try {
       if(!window.EnxameBridge){
         dot.style.background='#86868b';
-        dot.title='Ponte Enxame não carregada';
+        dot.title='Ponte desconectada';
         return;
       }
       const res = await window.EnxameBridge.request('capabilities', {}, { timeoutMs: 4000 });
       const caps = res.data || {};
       const ready = !!(caps.hasWpp || caps.hasStoreChat);
       if(ready){
-        if(caps.hasActiveChat){
-          dot.style.background='#30d158';
-          dot.title='Pronto • Chat ativo detectado';
-        } else {
-          dot.style.background='#30d158';
-          dot.title='Pronto • Abra uma conversa para enviar';
-        }
+        dot.style.background='#30d158';
+        dot.title='Pronto';
       } else {
         dot.style.background='#ff9f0a';
-        dot.title='Carregando WhatsApp Web...';
+        dot.title='Carregando...';
       }
     } catch(e){
       dot.style.background='#86868b';
-      dot.title='Aguardando WhatsApp';
+      dot.title='Aguardando';
     }
   }
 
@@ -562,11 +537,12 @@
     header.querySelector('.enxame-modal-close').onclick=closeModal;
     const toolbar=document.createElement('div'); toolbar.className='enxame-toolbar';
     if(type==='funis'){
-      toolbar.innerHTML=`<button class="enxame-btn enxame-btn-secondary enxame-btn-small" id="btn-export-all">📦 Exportar Tudo</button><label class="enxame-btn enxame-btn-secondary enxame-btn-small" style="cursor:pointer">📥 Importar<input type="file" id="import-funil" accept=".json,.zip,.enxame.zip" hidden></label><button class="enxame-btn enxame-btn-primary enxame-btn-small" id="btn-new-funil">+ Novo Funil</button>`;
+      toolbar.innerHTML=`<button class="enxame-btn enxame-btn-secondary enxame-btn-small" id="btn-export-all">Exportar tudo</button><label class="enxame-btn enxame-btn-secondary enxame-btn-small" style="cursor:pointer">Importar<input type="file" id="import-funil" accept=".json,.zip,.enxame.zip" hidden></label><button class="enxame-btn enxame-btn-primary enxame-btn-small" id="btn-new-funil">Novo funil</button>`;
     } else if(type==='audio'){
-      toolbar.innerHTML=`<button class="enxame-btn enxame-btn-primary enxame-btn-small" id="btn-add-${type}">📁 Importar áudio (OGG/Opus real)</button><button class="enxame-btn enxame-btn-secondary enxame-btn-small" id="btn-record-${type}">🔴 Gravar PTT 48 kHz</button>`;
+      toolbar.innerHTML=`<button class="enxame-btn enxame-btn-secondary enxame-btn-small" id="btn-add-audio">Importar áudio</button><button class="enxame-btn enxame-btn-primary enxame-btn-small" id="btn-record-audio">Gravar áudio</button>`;
     } else {
-      toolbar.innerHTML=`<button class="enxame-btn enxame-btn-primary enxame-btn-small" id="btn-add-${type}">+ Adicionar ${getTitle(type)}</button>`;
+      const addLabels = { texto: 'Adicionar texto', imagem: 'Adicionar imagem', video: 'Adicionar vídeo' };
+      toolbar.innerHTML=`<button class="enxame-btn enxame-btn-primary enxame-btn-small" id="btn-add-${type}">${addLabels[type] || 'Adicionar'}</button>`;
     }
     const body=document.createElement('div'); body.className='enxame-modal-body'; body.id='enxame-modal-body';
     card.appendChild(header); card.appendChild(toolbar); card.appendChild(body);
@@ -599,7 +575,7 @@
   }
   function closeModal(){
     if(currentRecording){
-      try { if(currentRecording.dispose) currentRecording.dispose(); else currentRecording.recorder?.stop(); } catch {}
+      try { currentRecording.dispose?.(); } catch {}
       currentRecording=null;
     }
     if(recordingTimerInt){ clearInterval(recordingTimerInt); recordingTimerInt=null; }
@@ -608,8 +584,20 @@
   function closeDeleteModal(){
     const m=$('#enxame-delete-modal'); if(m) m.remove();
   }
-  function getTitle(t){ const m={audio:'Áudios PTT ZapVoice', texto:'Textos', imagem:'Imagens HD', video:'Vídeos HD', funis:'Seus Funis'}; return m[t]||t; }
-  function getSubtitle(t){ const m={audio:'OGG/Opus 48 kHz mono • volume normalizado (-16 dBFS) • Waveform real 64 barras • PTT nativo', texto:'Use {{nome}} para personalizar • envio instantâneo • editável', imagem:'Resolução original • sem compressão • lightbox HD • editável', video:'Resolução original • envio 1 clique • editável', funis:'Funis com quadrados ligáveis • export .enxame.zip'}; return m[t]||''; }
+  function getTitle(t){
+    const m={audio:'Áudios', texto:'Textos', imagem:'Imagens', video:'Vídeos', funis:'Funis'};
+    return m[t]||t;
+  }
+  function getSubtitle(t){
+    const m={
+      audio:'Grave ou importe',
+      texto:'Use {{nome}} para personalizar',
+      imagem:'Envio em resolução original',
+      video:'Envio em resolução original',
+      funis:'Sequências de mensagens'
+    };
+    return m[t]||'';
+  }
 
   // ===== FORMS =====
   function openTextForm(existingItem){
@@ -618,16 +606,16 @@
     body.innerHTML=`
       <div class="enxame-form">
         <div class="enxame-form-row">
-          <label class="enxame-form-label">Nome da mensagem</label>
-          <input id="enxame-form-nome" class="enxame-form-input" placeholder="Ex: Boas vindas 1" value="${escapeHtml(existingItem?.nome||'')}" maxlength="60">
+          <label class="enxame-form-label">Nome</label>
+          <input id="enxame-form-nome" class="enxame-form-input" placeholder="Ex.: Mensagem inicial" value="${escapeHtml(existingItem?.nome||'')}" maxlength="60">
         </div>
         <div class="enxame-form-row">
-          <label class="enxame-form-label">Conteúdo • use {{nome}} e {{nome_completo}}</label>
-          <textarea id="enxame-form-conteudo" class="enxame-form-textarea" placeholder="Olá {{nome}}, tudo bem? Vi que você...">${escapeHtml(existingItem?.conteudo||'')}</textarea>
+          <label class="enxame-form-label">Conteúdo</label>
+          <textarea id="enxame-form-conteudo" class="enxame-form-textarea" placeholder="Olá {{nome}}, tudo bem?">${escapeHtml(existingItem?.conteudo||'')}</textarea>
         </div>
         <div class="enxame-form-actions">
           <button class="enxame-btn enxame-btn-secondary" id="enxame-form-cancel" style="flex:1">Cancelar</button>
-          <button class="enxame-btn enxame-btn-primary" id="enxame-form-save" style="flex:1">${isEdit?'Salvar alterações':'Salvar texto HQ'}</button>
+          <button class="enxame-btn enxame-btn-primary" id="enxame-form-save" style="flex:1">Salvar</button>
         </div>
       </div>
     `;
@@ -635,16 +623,16 @@
     $('#enxame-form-save').onclick=async ()=>{
       const nome=$('#enxame-form-nome').value.trim();
       const conteudo=$('#enxame-form-conteudo').value.trim();
-      if(!nome || nome.length<2){ toast('Nome obrigatório (mín 2 letras)'); return; }
-      if(!conteudo || conteudo.length<2){ toast('Conteúdo obrigatório'); return; }
+      if(!nome){ toast('Digite um nome (VALIDATION_ERROR)'); return; }
+      if(!conteudo){ toast('Digite o conteúdo (VALIDATION_ERROR)'); return; }
       try {
         await ensureDB();
         const obj={ id: existingItem?.id || uid(), nome, conteudo, createdAt: existingItem?.createdAt || Date.now(), updatedAt: Date.now() };
         await idbPut('textos', obj);
-        toast(isEdit?'Texto atualizado':'Texto salvo em HQ');
+        toast('Salvo');
         updateBadges();
         renderModal('texto');
-      } catch(e){ console.error(e); toast('Erro ao salvar: '+e.message); }
+      } catch(e){ toast('Erro ao salvar (SAVE_ERROR)'); }
     };
     setTimeout(()=>$('#enxame-form-nome')?.focus(), 100);
   }
@@ -658,11 +646,14 @@
       try {
         const url=URL.createObjectURL(file);
         if(type==='audio'){
+          const dur = preDuration || existingItem?.duration;
+          const durStr = dur ? (String(dur).replace('.', ',') + ' s') : '';
+          const sizeStr = file.size ? `${Math.round(file.size / 1024)} KB` : '';
+          const metaStr = [durStr, sizeStr].filter(Boolean).join(' · ');
           const wf = preWaveform || existingItem?.waveform;
-          const dur = preDuration || existingItem?.duration || '';
-          previewHtml=`<div id="enxame-form-file-preview" class="enxame-form-file-preview"><audio controls src="${url}" style="width:100%;height:40px"></audio><div style="font-size:11px;color:#86868b;margin-top:6px">${escapeHtml(file.name||'áudio PTT')} • ${(file.size/1024).toFixed(0)} KB • OGG/Opus 48 kHz mono • volume normalizado • ${dur?dur+'s •':''} PTT ZapVoice</div>${wf?`<div class="enxame-card-audio-wave" style="margin-top:10px">${wf.slice(0,24).map(v=>`<div class="enxame-wave-bar" style="height:${4+ (v/100)*24}px"></div>`).join('')}</div><div style="font-size:10px;color:#30d158;margin-top:4px;font-weight:700">✓ Waveform real ${wf.length} barras • PTT nativo sem encaminhado</div>`:''}</div>`;
-        } else if(type==='imagem') previewHtml=`<div id="enxame-form-file-preview" class="enxame-form-file-preview"><img src="${url}" style="width:100%;max-height:180px;object-fit:cover;border-radius:12px"><div style="font-size:11px;color:#86868b;margin-top:6px">${escapeHtml(file.name||'imagem')}</div></div>`;
-        else if(type==='video') previewHtml=`<div id="enxame-form-file-preview" class="enxame-form-file-preview"><video src="${url}" controls muted style="width:100%;max-height:180px;border-radius:12px"></video><div style="font-size:11px;color:#86868b;margin-top:6px">${escapeHtml(file.name||'vídeo')}</div></div>`;
+          previewHtml=`<div id="enxame-form-file-preview" class="enxame-form-file-preview"><audio controls src="${url}" style="width:100%;height:40px"></audio><div style="font-size:12px;color:#86868b;margin-top:6px">${escapeHtml(file.name||'Áudio')} · ${escapeHtml(metaStr)}</div>${wf?`<div class="enxame-card-audio-wave" style="margin-top:10px">${wf.slice(0,24).map(v=>`<div class="enxame-wave-bar" style="height:${4+ (v/100)*24}px"></div>`).join('')}</div>`:''}</div>`;
+        } else if(type==='imagem') previewHtml=`<div id="enxame-form-file-preview" class="enxame-form-file-preview"><img src="${url}" style="width:100%;max-height:180px;object-fit:cover;border-radius:12px"><div style="font-size:12px;color:#86868b;margin-top:6px">${escapeHtml(file.name||'Imagem')}</div></div>`;
+        else if(type==='video') previewHtml=`<div id="enxame-form-file-preview" class="enxame-form-file-preview"><video src="${url}" controls muted style="width:100%;max-height:180px;border-radius:12px"></video><div style="font-size:12px;color:#86868b;margin-top:6px">${escapeHtml(file.name||'Vídeo')}</div></div>`;
       } catch {}
     } else {
       previewHtml=`<div id="enxame-form-file-preview" class="enxame-form-file-preview" style="color:#86868b;font-size:13px">Nenhum arquivo selecionado</div>`;
@@ -671,18 +662,17 @@
     body.innerHTML=`
       <div class="enxame-form">
         <div class="enxame-form-row">
-          <label class="enxame-form-label">Nome da mensagem</label>
-          <input id="enxame-form-nome" class="enxame-form-input" placeholder="${type==='audio'?'Ex: Áudio boas vindas PTT ZapVoice':'Ex: Mídia 1'}" value="${escapeHtml(existingItem?.nome||suggestedName||'')}" maxlength="80">
+          <label class="enxame-form-label">Nome</label>
+          <input id="enxame-form-nome" class="enxame-form-input" placeholder="Nome do item" value="${escapeHtml(existingItem?.nome||suggestedName||'')}" maxlength="80">
         </div>
         ${previewHtml}
         <div style="display:flex;gap:10px;margin-top:12px">
-          <button class="enxame-btn enxame-btn-secondary enxame-btn-small" id="enxame-form-trocar" style="flex:1">📁 Trocar arquivo</button>
+          <button class="enxame-btn enxame-btn-secondary enxame-btn-small" id="enxame-form-trocar" style="flex:1">Trocar arquivo</button>
         </div>
         <div class="enxame-form-actions">
           <button class="enxame-btn enxame-btn-secondary" id="enxame-form-cancel" style="flex:1">Cancelar</button>
-          <button class="enxame-btn enxame-btn-primary" id="enxame-form-save" style="flex:1">${isEdit?'Salvar alterações':'Salvar em alta'}</button>
+          <button class="enxame-btn enxame-btn-primary" id="enxame-form-save" style="flex:1">Salvar</button>
         </div>
-        ${type==='audio'?`<div style="margin-top:14px;background:#f0fdf4;border:0.5px solid #bbf7d0;border-radius:12px;padding:10px 12px"><div style="font-size:11px;font-weight:700;color:#15803d">✓ Enxame Zap v2.9 - PTT Real OGG/Opus</div><div style="font-size:11px;color:#166534;margin-top:3px;line-height:1.35">48 kHz mono • Volume normalizado (-16 dBFS) com limitador • Waveform real 64 barras • Duração exata • Sem distorção • Compatível iOS/Android 1x/1.5x/2x</div></div>`:''}
       </div>
     `;
     window._enxamePendingEditForm={ id: existingItem?.id || null, type, pendingFile: file, existingItem, waveform: preWaveform || existingItem?.waveform, duration: preDuration || existingItem?.duration };
@@ -704,8 +694,8 @@
       const nome=$('#enxame-form-nome').value.trim();
       const state=window._enxamePendingEditForm;
       const finalFile=state?.pendingFile || file;
-      if(!nome || nome.length<2){ toast('Nome obrigatório'); return; }
-      if(!finalFile){ toast('Selecione um arquivo'); return; }
+      if(!nome){ toast('Digite um nome (VALIDATION_ERROR)'); return; }
+      if(!finalFile){ toast('Selecione um arquivo (VALIDATION_ERROR)'); return; }
       try {
         await ensureDB();
         const map={audio:'audios', imagem:'imagens', video:'videos'};
@@ -722,18 +712,18 @@
           updatedAt: Date.now()
         };
         await idbPut(store, obj);
-        toast(isEdit ? `${getTitle(type)} atualizado` : `${getTitle(type)} salvo ZapVoice`);
+        toast('Salvo');
         window._enxamePendingEditForm=null;
         window._enxamePendingFile=null;
         window._enxamePendingWaveform=null;
         window._enxamePendingDuration=null;
         updateBadges();
         renderModal(type);
-      } catch(e){ console.error(e); toast('Erro ao salvar: '+e.message); }
+      } catch(e){ toast('Erro ao salvar (SAVE_ERROR)'); }
     };
   }
 
-  // ===== DELETE CONFIRM MODAL - LIXEIRA OBRIGATÓRIA =====
+  // ===== DELETE CONFIRM MODAL =====
   function openDeleteConfirmModal(itemId, itemType, itemName, storeName){
     closeDeleteModal();
     const overlay=document.createElement('div'); overlay.id='enxame-delete-modal';
@@ -741,11 +731,11 @@
     const card=document.createElement('div'); card.className='enxame-delete-card';
     card.innerHTML=`
       <div class="enxame-delete-icon">🗑️</div>
-      <div class="enxame-delete-title">Excluir mensagem?</div>
-      <div class="enxame-delete-sub">Você tem certeza que deseja excluir<br><b>"${escapeHtml(itemName||'esta mensagem')}"</b> de ${getTitle(itemType)}?<br>Esta ação não pode ser desfeita.</div>
+      <div class="enxame-delete-title">Excluir?</div>
+      <div class="enxame-delete-sub">Deseja excluir "${escapeHtml(itemName||'este item')}"?</div>
       <div class="enxame-delete-actions">
         <button class="enxame-btn enxame-btn-secondary" id="enxame-delete-cancel" style="flex:1">Cancelar</button>
-        <button class="enxame-btn enxame-btn-danger" id="enxame-delete-confirm" style="flex:1">🗑️ Excluir</button>
+        <button class="enxame-btn enxame-btn-danger" id="enxame-delete-confirm" style="flex:1">Excluir</button>
       </div>
     `;
     overlay.appendChild(card);
@@ -757,22 +747,21 @@
       try {
         await ensureDB();
         await idbDel(storeName, itemId);
-        toast(`"${itemName}" excluído`);
+        toast('Excluído');
         closeDeleteModal();
         updateBadges();
         renderModal(itemType);
       } catch(e){
-        console.error('delete fail', e);
-        toast('Erro ao excluir: '+e.message);
+        toast('Erro ao excluir (DELETE_ERROR)');
         closeDeleteModal();
       }
     };
   }
 
-  // ===== RECORDER UI APPLE v2.9 =====
+  // ===== RECORDER UI APPLE =====
   function openProcessingModal(){
     const overlay=document.createElement('div'); overlay.id='enxame-processing-modal';
-    overlay.innerHTML=`<div class="enxame-processing-card"><div class="enxame-processing-spinner"></div><div class="enxame-processing-title">Codificando OGG/Opus 48 kHz...</div><div class="enxame-processing-sub">Normalização RMS a -16 dBFS • WebCodecs nativo</div></div>`;
+    overlay.innerHTML=`<div class="enxame-processing-card"><div class="enxame-processing-spinner"></div><div class="enxame-processing-title">Processando...</div></div>`;
     document.body.appendChild(overlay);
     return overlay;
   }
@@ -781,96 +770,135 @@
   async function openAudioRecorderUI(){
     const body=$('#enxame-modal-body'); if(!body) return;
     if(!window.EnxameAudioPipeline || !window.EnxameAudioPipeline.startRecordingHQ){
-      toast('Pipeline de áudio não carregado - recarregue a página');
+      toast('Microfone indisponível (MIC_ERROR)');
       return;
     }
     body.innerHTML=`
       <div class="enxame-recorder">
         <div class="enxame-recorder-header">
-          <div style="display:flex;align-items:center;gap:8px"><div class="enxame-rec-dot"></div><span style="font-weight:700;font-size:13px">Gravando PTT OGG/Opus 48 kHz</span></div>
-          <span id="enxame-rec-timer" style="font-variant-numeric:tabular-nums;font-weight:700">00:00</span>
+          <div style="display:flex;align-items:center;gap:8px">
+            <div class="enxame-rec-dot" id="enxame-rec-dot"></div>
+            <span id="enxame-rec-status" style="font-weight:700;font-size:14px">Gravando</span>
+          </div>
+          <span id="enxame-rec-timer" style="font-variant-numeric:tabular-nums;font-weight:700;font-size:14px">00:00</span>
         </div>
-        <div class="enxame-recorder-sub">Microfone com AGC e cancelamento de ruído • Volume normalizado a -16 dBFS</div>
         <div class="enxame-recorder-wave" id="enxame-rec-wave">${Array(32).fill(0).map(()=>`<div class="enxame-rec-bar" style="height:6px"></div>`).join('')}</div>
         <div class="enxame-volume-area">
           <div class="enxame-volume-label"><span>Volume</span><span id="enxame-volume-pct">0%</span></div>
           <div class="enxame-volume-bg"><div id="enxame-volume-fill" class="enxame-volume-fill" style="width:0%"></div></div>
-          <div id="enxame-volume-status" style="font-size:11px;color:#86868b;margin-top:6px">Fale para ver o volume subir...</div>
+          <div id="enxame-volume-status" style="font-size:11.5px;color:#86868b;margin-top:6px">Fale para ver o volume</div>
         </div>
         <div class="enxame-form-actions">
-          <button class="enxame-btn enxame-btn-secondary" id="enxame-rec-cancel" style="flex:1">✕ Cancelar</button>
-          <button class="enxame-btn enxame-btn-primary" id="enxame-rec-stop" style="flex:1.3">⏹️ Parar gravação</button>
+          <button class="enxame-btn enxame-btn-secondary" id="enxame-rec-cancel" style="flex:1">Cancelar</button>
+          <button class="enxame-btn enxame-btn-secondary" id="enxame-rec-pause" style="flex:1">Pausar</button>
+          <button class="enxame-btn enxame-btn-primary" id="enxame-rec-stop" style="flex:1.2">Parar</button>
         </div>
-        <div style="margin-top:10px;background:#f0fdf4;border:0.5px solid #bbf7d0;border-radius:10px;padding:8px 10px"><div style="font-size:10px;font-weight:700;color:#15803d">✓ v2.9 OGG/Opus Real</div><div style="font-size:10px;color:#166534;margin-top:2px">Codificação nativa WebCodecs • Duração exata e waveform calculada de amostras reais</div></div>
       </div>
     `;
+    const dotEl=$('#enxame-rec-dot');
+    const statusTextEl=$('#enxame-rec-status');
     const waveEl=$('#enxame-rec-wave');
     const fillEl=$('#enxame-volume-fill');
     const pctEl=$('#enxame-volume-pct');
     const statusEl=$('#enxame-volume-status');
     const timerEl=$('#enxame-rec-timer');
-    let startTime=Date.now();
+    const pauseBtn=$('#enxame-rec-pause');
+
     recordingTimerInt=setInterval(()=>{
-      const elapsed=Math.floor((Date.now()-startTime)/1000);
-      const m=String(Math.floor(elapsed/60)).padStart(2,'0');
-      const s=String(elapsed%60).padStart(2,'0');
+      if(!currentRecording) return;
+      const elapsedMs = currentRecording.elapsedMs ? currentRecording.elapsedMs() : 0;
+      const elapsedSec = Math.floor(elapsedMs / 1000);
+      const m=String(Math.floor(elapsedSec/60)).padStart(2,'0');
+      const s=String(elapsedSec%60).padStart(2,'0');
       if(timerEl) timerEl.textContent=`${m}:${s}`;
-      if(elapsed>=120){
-        toast('Limite 2min atingido - finalizando gravação');
+      if(elapsedSec>=120){
+        toast('Limite atingido');
         const stopBtn=$('#enxame-rec-stop'); if(stopBtn) stopBtn.click();
       }
-    },200);
+    }, 150);
 
     try {
       currentRecording = await window.EnxameAudioPipeline.startRecordingHQ((vol)=>{
+        if(!currentRecording || currentRecording.isPaused?.()) return;
         if(fillEl) fillEl.style.width=`${vol}%`;
         if(pctEl) pctEl.textContent=`${vol}%`;
-        if(vol<10){ fillEl.style.background='#86868b'; if(statusEl) statusEl.textContent='Muito baixo - chegue mais perto'; }
-        else if(vol<30){ fillEl.style.background='#ff9f0a'; if(statusEl) statusEl.textContent='Baixo - fale mais alto'; }
-        else if(vol<70){ fillEl.style.background='#30d158'; if(statusEl) statusEl.textContent='Perfeito! Volume ideal'; }
-        else { fillEl.style.background='#30d158'; if(statusEl) statusEl.textContent='Excelente! ZapVoice'; }
+        if(vol<10){ fillEl.style.background='#86868b'; if(statusEl) statusEl.textContent='Fale mais perto'; }
+        else if(vol<30){ fillEl.style.background='#ff9f0a'; if(statusEl) statusEl.textContent='Bom'; }
+        else if(vol<75){ fillEl.style.background='#30d158'; if(statusEl) statusEl.textContent='Ótimo'; }
+        else { fillEl.style.background='#ff3b30'; if(statusEl) statusEl.textContent='Volume alto'; }
         if(waveEl){
           const bars=waveEl.children;
           for(let i=0;i<bars.length;i++){
-            const h = 6 + (vol/100)*32 + Math.random()*6 + Math.sin(Date.now()/200 + i)*4;
+            const h = 6 + (vol/100)*32 + Math.sin(Date.now()/200 + i)*4;
             bars[i].style.height=`${Math.max(4,h)}px`;
-            bars[i].style.opacity= vol>5 ? '1' : '0.3';
+            bars[i].style.opacity= vol>5 ? '1' : '0.35';
           }
         }
       });
-      console.log('[Enxame v2.9] Gravação iniciada OGG/Opus', currentRecording);
     } catch(e){
-      console.error('startRecording fail v2.9', e);
-      body.innerHTML=`<div class="enxame-empty"><div class="enxame-empty-icon">🎙️</div><div class="enxame-empty-title">Erro microfone</div><div class="enxame-empty-sub">${escapeHtml(e.message)} - Permita microfone.</div><button class="enxame-btn enxame-btn-primary enxame-btn-small" style="margin-top:12px" onclick="location.reload()">Recarregar</button></div>`;
+      body.innerHTML=`<div class="enxame-empty"><div class="enxame-empty-icon">🎙️</div><div class="enxame-empty-title">Erro no microfone</div><div class="enxame-empty-sub">Permita o acesso ao microfone (MIC_ERROR)</div><button class="enxame-btn enxame-btn-primary enxame-btn-small" style="margin-top:12px" onclick="location.reload()">Recarregar</button></div>`;
       return;
     }
 
+    if(pauseBtn){
+      pauseBtn.onclick=()=>{
+        if(!currentRecording) return;
+        if(currentRecording.isPaused?.()){
+          currentRecording.resume?.();
+          pauseBtn.textContent='Pausar';
+          if(statusTextEl) statusTextEl.textContent='Gravando';
+          if(dotEl) dotEl.classList.remove('enxame-rec-paused');
+          if(waveEl) waveEl.classList.remove('enxame-rec-paused');
+        } else {
+          currentRecording.pause?.();
+          pauseBtn.textContent='Continuar';
+          if(statusTextEl) statusTextEl.textContent='Pausado';
+          if(dotEl) dotEl.classList.add('enxame-rec-paused');
+          if(waveEl) waveEl.classList.add('enxame-rec-paused');
+          if(fillEl) fillEl.style.width='0%';
+          if(pctEl) pctEl.textContent='0%';
+          if(statusEl) statusEl.textContent='Pausado';
+        }
+      };
+    }
+
     $('#enxame-rec-cancel').onclick=()=>{
-      try { if(currentRecording?.dispose) currentRecording.dispose(); else currentRecording?.recorder?.stop(); } catch {}
+      try { currentRecording?.dispose?.(); } catch {}
       currentRecording=null;
       if(recordingTimerInt){ clearInterval(recordingTimerInt); recordingTimerInt=null; }
       toast('Gravação cancelada');
       renderModal('audio');
     };
+
     $('#enxame-rec-stop').onclick=async ()=>{
+      if(!currentRecording) return;
+      const recordedMs = currentRecording.elapsedMs ? currentRecording.elapsedMs() : 0;
+      if(recordedMs < 1000){
+        toast('Gravação muito curta');
+        try { currentRecording.dispose?.(); } catch {}
+        currentRecording=null;
+        if(recordingTimerInt){ clearInterval(recordingTimerInt); recordingTimerInt=null; }
+        renderModal('audio');
+        return;
+      }
+
       const btn=$('#enxame-rec-stop');
-      if(btn){ btn.textContent='⏳ Codificando OGG/Opus...'; btn.disabled=true; }
+      if(btn){ btn.textContent='Processando...'; btn.disabled=true; }
       const processingModal = openProcessingModal();
       if(recordingTimerInt){ clearInterval(recordingTimerInt); recordingTimerInt=null; }
       try {
-        // Timeout generoso de pelo menos 30s
         const result = await Promise.race([
           currentRecording.stopFast(),
-          new Promise((_,rej)=>setTimeout(()=>rej(new Error('Timeout 30s na codificação de áudio')), 35000))
+          new Promise((_,rej)=>setTimeout(()=>rej(new Error('Timeout')), 35000))
         ]);
-        console.log('[Enxame v2.9] Gravação codificada com sucesso:', result.blob.size, 'bytes, dur=', result.duration);
         closeProcessingModal();
-        toast(`Áudio gravado ${result.duration}s • OGG/Opus 48 kHz`);
-        openMediaForm('audio', null, result.blob, `Gravação ${new Date().toLocaleTimeString()}`, result.waveform, result.duration);
+        const now = new Date();
+        const timeStr = now.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+        const defaultName = `Gravação ${timeStr}`;
+        openMediaForm('audio', null, result.blob, defaultName, result.waveform, result.duration);
       } catch(e){
-        console.error('stopFast fail v2.9', e);
         closeProcessingModal();
-        toast('Erro ao finalizar gravação: '+e.message);
+        toast('Erro ao processar áudio (AUDIO_PROCESS_ERROR)');
         renderModal('audio');
       } finally {
         currentRecording=null;
@@ -881,19 +909,22 @@
 
   async function renderModal(type){
     const body=$('#enxame-modal-body'); if(!body) return;
-    body.innerHTML='<div style="padding:32px 20px;text-align:center;color:#86868b;font-size:13px">Carregando do IndexedDB...</div>';
+    body.innerHTML='<div style="padding:32px 20px;text-align:center;color:#86868b;font-size:13px">Carregando...</div>';
     try { await ensureDB(); } catch(e){
-      body.innerHTML=`<div class="enxame-empty"><div class="enxame-empty-icon">⚠️</div><div class="enxame-empty-title">Erro IndexedDB</div><div class="enxame-empty-sub">${escapeHtml(e.message)} - Desative o Shield do Brave no WhatsApp Web e recarregue.</div><button class="enxame-btn enxame-btn-primary enxame-btn-small" style="margin-top:12px" onclick="location.reload()">Recarregar</button></div>`;
+      body.innerHTML=`<div class="enxame-empty"><div class="enxame-empty-icon">⚠️</div><div class="enxame-empty-title">Erro ao carregar banco</div><div class="enxame-empty-sub">Recarregue a página (DB_ERROR)</div><button class="enxame-btn enxame-btn-primary enxame-btn-small" style="margin-top:12px" onclick="location.reload()">Recarregar</button></div>`;
       return;
     }
     if(type==='funis'){
       try {
         const funis=await idbGetAll('funis');
-        if(!funis.length){ body.innerHTML='<div class="enxame-empty"><div class="enxame-empty-icon">⚡</div><div class="enxame-empty-title">Nenhum funil ainda</div><div class="enxame-empty-sub">Clique em + Novo Funil para criar seu primeiro funil com quadrados ligáveis. Tudo salvo em IndexedDB + backup automático .enxame.zip</div></div>'; return; }
+        if(!funis.length){
+          body.innerHTML='<div class="enxame-empty"><div class="enxame-empty-icon">⚡</div><div class="enxame-empty-title">Nenhum funil ainda</div><div class="enxame-empty-sub">Toque em Novo funil.</div></div>';
+          return;
+        }
         body.innerHTML='';
         funis.forEach(f=>{
           const div=document.createElement('div'); div.className='enxame-funil-item';
-          div.innerHTML=`<div><div class="enxame-funil-name">${escapeHtml(f.nome)}</div><div class="enxame-funil-steps">${f.nodes?.length||0} passos • ${f.edges?.length||0} ligações</div></div><div style="display:flex;gap:8px"><button class="enxame-btn enxame-btn-secondary enxame-btn-small" data-export="${f.id}">Exportar</button><button class="enxame-btn enxame-btn-primary enxame-btn-small" data-disparar="${f.id}">Disparar</button><button class="enxame-btn enxame-btn-danger enxame-btn-small" data-delete-funil="${f.id}" title="Excluir funil">🗑️</button></div>`;
+          div.innerHTML=`<div><div class="enxame-funil-name">${escapeHtml(f.nome)}</div><div class="enxame-funil-steps">${f.nodes?.length||0} passos • ${f.edges?.length||0} ligações</div></div><div style="display:flex;gap:8px"><button class="enxame-btn enxame-btn-secondary enxame-btn-small" data-export="${f.id}">Exportar</button><button class="enxame-btn enxame-btn-primary enxame-btn-small" data-disparar="${f.id}">Disparar</button><button class="enxame-btn enxame-btn-danger enxame-btn-small" data-delete-funil="${f.id}" title="Excluir">🗑️</button></div>`;
           body.appendChild(div);
         });
         body.querySelectorAll('[data-export]').forEach(b=>b.onclick=()=>exportFunnelZip(b.dataset.export));
@@ -902,7 +933,7 @@
           const f=await idbGet('funis', b.dataset.deleteFunil);
           if(f) openDeleteConfirmModal(f.id, 'funis', f.nome, 'funis');
         });
-      } catch(e){ body.innerHTML=`<div class="enxame-empty"><div class="enxame-empty-title">Erro ao carregar funis</div><div class="enxame-empty-sub">${escapeHtml(e.message)}</div></div>`; }
+      } catch(e){ body.innerHTML=`<div class="enxame-empty"><div class="enxame-empty-title">Erro ao carregar (LOAD_ERROR)</div></div>`; }
       return;
     }
     const storeMap={audio:'audios', texto:'textos', imagem:'imagens', video:'videos'};
@@ -910,7 +941,13 @@
     try {
       const items=await idbGetAll(store);
       if(!items.length){
-        body.innerHTML=`<div class="enxame-empty"><div class="enxame-empty-icon">${type==='audio'?'🎙️':type==='texto'?'📝':type==='imagem'?'🖼️':'🎬'}</div><div class="enxame-empty-title">Nenhum ${getTitle(type)} salvo</div><div class="enxame-empty-sub">${type==='audio'?'Grave ou importe áudios — convertidos automaticamente para OGG/Opus 48 kHz mono com volume normalizado e waveform real.':'Clique em + Adicionar para salvar em resolução máxima. Depois edite nome e arquivo se precisar.'}</div></div>`;
+        const emptyLabels = {
+          audio: 'Nenhum áudio ainda. Toque em Gravar áudio.',
+          texto: 'Nenhum texto ainda. Toque em Adicionar texto.',
+          imagem: 'Nenhuma imagem ainda. Toque em Adicionar imagem.',
+          video: 'Nenhum vídeo ainda. Toque em Adicionar vídeo.'
+        };
+        body.innerHTML=`<div class="enxame-empty"><div class="enxame-empty-icon">${type==='audio'?'🎙️':type==='texto'?'📝':type==='imagem'?'🖼️':'🎬'}</div><div class="enxame-empty-title">${getTitle(type)}</div><div class="enxame-empty-sub">${emptyLabels[type] || 'Nenhum item ainda.'}</div></div>`;
         return;
       }
       body.innerHTML='';
@@ -919,50 +956,99 @@
         const card=document.createElement('div'); card.className='enxame-card';
         let contentHtml='';
         if(type==='audio'){
-          const size=item.blob ? `${(item.blob.size/1024).toFixed(0)} KB` : '';
           const url=item.blob ? URL.createObjectURL(item.blob) : '';
           const wf=item.waveform||[];
-          const waveHtml = wf.length ? `<div class="enxame-card-audio-wave">${wf.slice(0,18).map(v=>`<div class="enxame-wave-bar" style="height:${4+ (v/100)*20}px"></div>`).join('')}</div>` : `<div class="enxame-card-audio-wave">${Array(18).fill(0).map(()=>`<div class="enxame-wave-bar" style="height:${8+Math.random()*18}px"></div>`).join('')}</div>`;
-          contentHtml=`${waveHtml}<audio controls src="${url}" style="width:100%;height:40px"></audio><div class="enxame-card-meta">${escapeHtml(size)} • OGG/Opus 48 kHz mono • ${item.duration?item.duration+'s •':''} PTT ZapVoice • tocável</div>`;
+          const waveHtml = wf.length
+            ? `<div class="enxame-card-audio-wave">${wf.slice(0,24).map(v=>`<div class="enxame-wave-bar" style="height:${4+ (v/100)*20}px"></div>`).join('')}</div>`
+            : `<div class="enxame-card-audio-wave">${Array(24).fill(0).map(()=>`<div class="enxame-wave-bar" style="height:10px"></div>`).join('')}</div>`;
+
+          const durStr = item.duration ? (String(item.duration).replace('.', ',') + ' s') : '';
+          const sizeStr = item.blob ? `${Math.round(item.blob.size / 1024)} KB` : '';
+          const metaStr = [durStr, sizeStr].filter(Boolean).join(' · ');
+
+          contentHtml = `
+            ${waveHtml}
+            <audio controls src="${url}"></audio>
+            <div class="enxame-card-meta">${escapeHtml(metaStr)}</div>
+          `;
+          card.innerHTML = `
+            <div class="enxame-card-top">
+              <div class="enxame-card-name" title="${escapeHtml(item.nome)}">${escapeHtml(item.nome)}</div>
+              <button class="enxame-card-delete" data-delete="${item.id}" title="Excluir">🗑️</button>
+            </div>
+            <div class="enxame-card-content">${contentHtml}</div>
+            <div class="enxame-card-actions">
+              <button class="enxame-btn enxame-btn-primary enxame-card-action-primary" data-send="${item.id}">Enviar</button>
+              <div class="enxame-card-action-secondary-row">
+                <button class="enxame-btn enxame-btn-secondary" data-edit="${item.id}">Editar</button>
+                <button class="enxame-btn enxame-btn-secondary" data-download="${item.id}">Baixar</button>
+              </div>
+            </div>
+          `;
         } else if(type==='texto'){
           const preview=(item.conteudo||'').slice(0,120);
           contentHtml=`<div class="enxame-card-text-preview">${escapeHtml(preview)}${(item.conteudo||'').length>120?'...':''}</div>`;
+          card.innerHTML = `
+            <div class="enxame-card-top">
+              <div class="enxame-card-name" title="${escapeHtml(item.nome)}">${escapeHtml(item.nome)}</div>
+              <button class="enxame-card-delete" data-delete="${item.id}" title="Excluir">🗑️</button>
+            </div>
+            <div class="enxame-card-content">${contentHtml}</div>
+            <div class="enxame-card-actions">
+              <button class="enxame-btn enxame-btn-primary enxame-card-action-primary" data-send="${item.id}">Enviar</button>
+              <div class="enxame-card-action-secondary-row">
+                <button class="enxame-btn enxame-btn-secondary" data-edit="${item.id}">Editar</button>
+              </div>
+            </div>
+          `;
         } else if(type==='imagem'){
           const url=URL.createObjectURL(item.blob);
-          contentHtml=`<img src="${url}" loading="lazy"><div class="enxame-card-meta">${(item.blob.size/1024/1024).toFixed(2)} MB • original HD</div>`;
+          const sizeMb = item.blob ? (item.blob.size / (1024 * 1024)).toFixed(1).replace('.', ',') + ' MB' : '';
+          contentHtml=`<img src="${url}" loading="lazy"><div class="enxame-card-meta">${escapeHtml(sizeMb)}</div>`;
+          card.innerHTML = `
+            <div class="enxame-card-top">
+              <div class="enxame-card-name" title="${escapeHtml(item.nome)}">${escapeHtml(item.nome)}</div>
+              <button class="enxame-card-delete" data-delete="${item.id}" title="Excluir">🗑️</button>
+            </div>
+            <div class="enxame-card-content">${contentHtml}</div>
+            <div class="enxame-card-actions">
+              <button class="enxame-btn enxame-btn-primary enxame-card-action-primary" data-send="${item.id}">Enviar</button>
+              <div class="enxame-card-action-secondary-row">
+                <button class="enxame-btn enxame-btn-secondary" data-edit="${item.id}">Editar</button>
+              </div>
+            </div>
+          `;
         } else if(type==='video'){
           const url=URL.createObjectURL(item.blob);
-          contentHtml=`<video src="${url}" muted></video><div class="enxame-card-meta">${(item.blob.size/1024/1024).toFixed(2)} MB • original</div>`;
-        }
-        card.innerHTML=`
-          <div class="enxame-card-top">
-            <div class="enxame-card-name" title="${escapeHtml(item.nome)}">${escapeHtml(item.nome)}</div>
-            <div style="display:flex;gap:6px;align-items:center">
-              <button class="enxame-card-delete" data-delete="${item.id}" title="Excluir mensagem">🗑️</button>
-              <button class="enxame-card-menu" data-edit="${item.id}" title="Editar">✏️</button>
+          const sizeMb = item.blob ? (item.blob.size / (1024 * 1024)).toFixed(1).replace('.', ',') + ' MB' : '';
+          contentHtml=`<video src="${url}" muted></video><div class="enxame-card-meta">${escapeHtml(sizeMb)}</div>`;
+          card.innerHTML = `
+            <div class="enxame-card-top">
+              <div class="enxame-card-name" title="${escapeHtml(item.nome)}">${escapeHtml(item.nome)}</div>
+              <button class="enxame-card-delete" data-delete="${item.id}" title="Excluir">🗑️</button>
             </div>
-          </div>
-          <div class="enxame-card-content">${contentHtml}</div>
-          <div class="enxame-card-actions">
-            ${type==='audio'?`<button class="enxame-btn enxame-btn-secondary enxame-btn-small" data-download="${item.id}" title="Baixar arquivo .ogg">⬇ .ogg</button>`:''}
-            <button class="enxame-btn enxame-btn-secondary enxame-btn-small" data-edit="${item.id}" style="flex:1">Editar</button>
-            <button class="enxame-btn enxame-btn-primary enxame-btn-small" data-send="${item.id}" style="flex:1.3">▶ Enviar</button>
-          </div>
-        `;
+            <div class="enxame-card-content">${contentHtml}</div>
+            <div class="enxame-card-actions">
+              <button class="enxame-btn enxame-btn-primary enxame-card-action-primary" data-send="${item.id}">Enviar</button>
+              <div class="enxame-card-action-secondary-row">
+                <button class="enxame-btn enxame-btn-secondary" data-edit="${item.id}">Editar</button>
+              </div>
+            </div>
+          `;
+        }
         grid.appendChild(card);
       });
       body.appendChild(grid);
 
-      // Ações dos cards
       body.querySelectorAll('[data-download]').forEach(btn=>{
         btn.onclick=async ()=>{
           const id=btn.dataset.download;
           const item=await idbGet('audios', id);
-          if(!item || !item.blob){ toast('Áudio não encontrado'); return; }
+          if(!item || !item.blob){ toast('Item não encontrado (NOT_FOUND)'); return; }
           let blobToDownload = item.blob;
           if(item.schema !== 2 || item.format !== 'ogg-opus'){
             try {
-              toast('Convertendo para OGG/Opus real...');
+              toast('Processando...');
               const processed = await window.EnxameAudioPipeline.processFileForPTT(item.blob);
               item.blob = processed.blob;
               item.waveform = processed.waveform;
@@ -972,20 +1058,18 @@
               item.updatedAt = Date.now();
               await idbPut('audios', item);
               blobToDownload = item.blob;
-            } catch(e){
-              console.warn('[Enxame] Falha na conversão antes do download:', e);
-            }
+            } catch(e){}
           }
-          const url=URL.createObjectURL(blobToDownload);
-          const a=document.createElement('a');
-          a.href=url;
+          const url = URL.createObjectURL(blobToDownload);
+          const a = document.createElement('a');
+          a.href = url;
           const safeName=(item.nome||'audio').replace(/[/\\?%*:|"<>]/g, '_');
-          a.download=safeName.endsWith('.ogg') ? safeName : `${safeName}.ogg`;
+          a.download = safeName.endsWith('.ogg') ? safeName : `${safeName}.ogg`;
           document.body.appendChild(a);
           a.click();
           a.remove();
           setTimeout(()=>URL.revokeObjectURL(url), 10000);
-          toast('Download de '+a.download+' iniciado');
+          toast('Download iniciado');
         };
       });
 
@@ -1016,27 +1100,24 @@
             else if(type==='texto') await sendTextoInstant(item.conteudo);
             else if(type==='imagem') await sendImagemInstant(item.blob, false);
             else if(type==='video') await sendVideoInstant(item.blob);
-          } catch(err){
-            console.warn('[Enxame v2.9] Falha ao enviar item:', err);
-          }
+          } catch(err){}
         };
       });
     } catch(e){
-      console.error('renderModal error', e);
-      body.innerHTML=`<div class="enxame-empty"><div class="enxame-empty-icon">❌</div><div class="enxame-empty-title">Erro ao carregar</div><div class="enxame-empty-sub">${escapeHtml(e.message)} - Tente fechar e abrir novamente.</div></div>`;
+      body.innerHTML=`<div class="enxame-empty"><div class="enxame-empty-icon">❌</div><div class="enxame-empty-title">Erro ao carregar</div><div class="enxame-empty-sub">Tente fechar e abrir novamente (LOAD_ERROR)</div></div>`;
     }
   }
 
   (async()=>{
     injectMainWorld();
     ensureHiddenFileInput();
-    try { await ensureDB(); } catch(e){ console.warn('DB init fail', e); }
+    try { await ensureDB(); } catch(e){}
     const observer=new MutationObserver(()=>{ ensurePillsBar(); });
     observer.observe(document.body, {childList:true, subtree:true});
     ensurePillsBar();
     setInterval(()=>{ ensurePillsBar(); updateBadges(); }, 2500);
     setInterval(()=>{ updateWPPDot(); }, 5000);
     updateWPPDot();
-    console.log('%cEnxame Zap v2.9.0 ZapVoice - OGG/Opus Real + PTT Seguro','background:#1d1d1f;color:#fff;padding:8px 14px;border-radius:999px;font-weight:700');
+    console.log('[Enxame] v2.9.1 carregado');
   })();
 })();
