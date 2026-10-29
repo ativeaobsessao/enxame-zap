@@ -1,4 +1,4 @@
-/* Enxame Zap v2.9.1 - Interface Apple Simplificada */
+/* Enxame Zap v2.10.0 - Envio Instantâneo de Áudio PTT via WA-JS */
 (function(){
   const DB_NAME='enxame_zap_db';
   const DB_VERSION=3;
@@ -130,6 +130,19 @@
 
   // ===== ENVIO ÁUDIO =====
   async function sendAudioHQInstant(blobOrItem){
+    const mainEl = document.querySelector('#main');
+    if(!mainEl){
+      const err = new Error('Abra uma conversa para enviar (NO_CHAT_OPEN)');
+      err.code = 'NO_CHAT_OPEN';
+      toast(err.message);
+      throw err;
+    }
+
+    const titleEl = document.querySelector('[data-testid="conversation-info-header-chat-title"]') ||
+                    document.querySelector('header span[title]') ||
+                    document.querySelector('header [title]');
+    const chatTitle = (titleEl?.getAttribute('title') || titleEl?.textContent || '').trim();
+
     let item = (blobOrItem && blobOrItem.blob) ? blobOrItem : null;
     let blob = item ? item.blob : blobOrItem;
     let preWaveform = item?.waveform;
@@ -167,25 +180,32 @@
         throw err;
       }
 
-      const arrayBuffer = await blob.arrayBuffer();
+      const taskId = 'task_' + uid();
       const res = await window.EnxameBridge.request('send_media', {
-        buffer: arrayBuffer,
+        kind: 'audio',
+        blob,
         mime: blob.type || 'audio/ogg; codecs=opus',
-        waveform: preWaveform || true,
-        duration: preDuration || 5,
-        isWebM: !!preIsWebM
+        duration: preDuration,
+        waveform: preWaveform,
+        chatTitle,
+        taskId
       }, {
-        timeoutMs: 25000,
+        timeoutMs: 35000,
         onProgress: () => {
           toast('Enviando...');
         }
       });
 
       toast('Enviado');
-      return { ok: true, strategy: res.strategy, stage: res.stage, ms: res.ms };
+      return { ok: true, strategy: res.strategy || 'WAJS', stage: res.stage, ms: res.ms, data: res.data };
     } catch(e){
       const errCode = e.code || 'SEND_FAILED';
-      toast(`Erro ao enviar (${errCode})`);
+      if(e.mayHaveSent){
+        toast(`Pode ter sido enviado; confira o chat antes de tentar de novo (${errCode})`);
+      } else {
+        const cleanMsg = (e.message || 'Erro ao enviar').replace(/\s*\([^)]*\)\s*$/, '');
+        toast(`${cleanMsg} (${errCode})`);
+      }
       throw e;
     }
   }
@@ -506,9 +526,9 @@
         dot.title='Ponte desconectada';
         return;
       }
-      const res = await window.EnxameBridge.request('capabilities', {}, { timeoutMs: 4000 });
-      const caps = res.data || {};
-      const ready = !!(caps.hasWpp || caps.hasStoreChat);
+      const res = await window.EnxameBridge.request('ping', {}, { timeoutMs: 4000 });
+      const caps = res.data?.capabilities || {};
+      const ready = !!(caps.wajsReady && caps.hasSendFileMessage);
       if(ready){
         dot.style.background='#30d158';
         dot.title='Pronto';
@@ -1118,6 +1138,6 @@
     setInterval(()=>{ ensurePillsBar(); updateBadges(); }, 2500);
     setInterval(()=>{ updateWPPDot(); }, 5000);
     updateWPPDot();
-    console.log('[Enxame] v2.9.1 carregado');
+    console.log('[Enxame] v2.10.0 carregado');
   })();
 })();
