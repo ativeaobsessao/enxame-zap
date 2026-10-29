@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Enxame Zap - Funil HQ & PTT ZapVoice",
-  "version": "2.10.0",
+  "version": "2.10.1",
   "description": "Barra de pills no WhatsApp Web para envio com 1 clique de áudios PTT ZapVoice 48kHz, textos com {{nome}}, mídias e funis com delay humanizado.",
   "permissions": ["storage", "downloads"],
   "host_permissions": ["https://web.whatsapp.com/*"],
@@ -10,7 +10,8 @@
     {
       "matches": ["https://web.whatsapp.com/*"],
       "js": [
-        "lib/main-file-intercept.js"
+        "lib/main-file-intercept.js",
+        "lib/main-vmic.js"
       ],
       "run_at": "document_start",
       "world": "MAIN"
@@ -18,7 +19,6 @@
     {
       "matches": ["https://web.whatsapp.com/*"],
       "js": [
-        "lib/wppconnect-wa.js",
         "lib/wpp-main.js"
       ],
       "run_at": "document_idle",
@@ -32,6 +32,7 @@
         "lib/audio-pipeline.js",
         "lib/bridge-client.js",
         "lib/dom-sender.js",
+        "lib/voice-sender.js",
         "content.js"
       ],
       "css": ["content.css"],

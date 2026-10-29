@@ -1,4 +1,4 @@
-/* Enxame Zap v2.10.0 - Envio Instantâneo de Áudio PTT via WA-JS */
+/* Enxame Zap v2.10.1 - Envio Instantâneo de Áudio PTT via Microfone Virtual */
 (function(){
   const DB_NAME='enxame_zap_db';
   const DB_VERSION=3;
@@ -105,6 +105,12 @@
 
   // ===== ENVIO TEXTO =====
   async function sendTextoInstant(text){
+    if(window._enxameSendingAudio){
+      toast('Aguarde o áudio terminar');
+      const err = new Error('Aguarde o áudio terminar (AUDIO_BUSY)');
+      err.code = 'AUDIO_BUSY';
+      throw err;
+    }
     const final=replaceVars(text);
     closeModal();
     toast('Enviando...');
@@ -130,6 +136,13 @@
 
   // ===== ENVIO ÁUDIO =====
   async function sendAudioHQInstant(blobOrItem){
+    if(window._enxameSendingAudio){
+      toast('Aguarde o envio atual');
+      const err = new Error('Aguarde o envio atual (AUDIO_BUSY)');
+      err.code = 'AUDIO_BUSY';
+      throw err;
+    }
+
     const mainEl = document.querySelector('#main');
     if(!mainEl){
       const err = new Error('Abra uma conversa para enviar (NO_CHAT_OPEN)');
@@ -145,7 +158,6 @@
 
     let item = (blobOrItem && blobOrItem.blob) ? blobOrItem : null;
     let blob = item ? item.blob : blobOrItem;
-    let preWaveform = item?.waveform;
     let preDuration = item?.duration;
     let preIsWebM = item?.isWebM || (blob?.type && blob.type.includes('webm'));
 
@@ -163,7 +175,6 @@
           item.updatedAt = Date.now();
           await idbPut('audios', item);
           blob = item.blob;
-          preWaveform = item.waveform;
           preDuration = item.duration;
           preIsWebM = false;
         }
@@ -172,32 +183,39 @@
 
     closeModal();
     toast('Enviando...');
-    
+
+    let cancelBtn = null;
+    window._enxameSendingAudio = true;
+
     try {
-      if(!window.EnxameBridge){
-        const err = new Error('Ponte não conectada (BRIDGE_NOT_FOUND)');
-        err.code = 'BRIDGE_NOT_FOUND';
+      if(!window.EnxameVoiceSender){
+        const err = new Error('Módulo de microfone virtual indisponível (VOICE_SENDER_NOT_FOUND)');
+        err.code = 'VOICE_SENDER_NOT_FOUND';
         throw err;
       }
 
-      const taskId = 'task_' + uid();
-      const res = await window.EnxameBridge.request('send_media', {
-        kind: 'audio',
+      // Injeta botão flutuante para cancelamento rápido
+      cancelBtn = document.createElement('button');
+      cancelBtn.className = 'enxame-cancel-audio-floating';
+      cancelBtn.innerHTML = '✕ Cancelar áudio';
+      cancelBtn.onclick = () => {
+        if(window.EnxameVoiceSender){
+          window.EnxameVoiceSender.cancel();
+        }
+      };
+      document.body.appendChild(cancelBtn);
+
+      const res = await window.EnxameVoiceSender.send({
         blob,
-        mime: blob.type || 'audio/ogg; codecs=opus',
-        duration: preDuration,
-        waveform: preWaveform,
+        duration: preDuration || 1,
         chatTitle,
-        taskId
-      }, {
-        timeoutMs: 35000,
-        onProgress: () => {
-          toast('Enviando...');
+        onProgress: (remainingSec) => {
+          toast(`Enviando áudio… ${remainingSec} s`);
         }
       });
 
       toast('Enviado');
-      return { ok: true, strategy: res.strategy || 'WAJS', stage: res.stage, ms: res.ms, data: res.data };
+      return { ok: true, strategy: res.strategy || 'VMIC', confirmed: res.confirmed };
     } catch(e){
       const errCode = e.code || 'SEND_FAILED';
       if(e.mayHaveSent){
@@ -207,10 +225,21 @@
         toast(`${cleanMsg} (${errCode})`);
       }
       throw e;
+    } finally {
+      if(cancelBtn && cancelBtn.parentNode) {
+        cancelBtn.remove();
+      }
+      window._enxameSendingAudio = false;
     }
   }
 
   async function sendImagemInstant(blob, asDoc=false, caption=''){
+    if(window._enxameSendingAudio){
+      toast('Aguarde o áudio terminar');
+      const err = new Error('Aguarde o áudio terminar (AUDIO_BUSY)');
+      err.code = 'AUDIO_BUSY';
+      throw err;
+    }
     closeModal();
     if(!blob){
       const err = new Error('Selecione uma imagem (INVALID_BLOB)');
@@ -255,6 +284,12 @@
   }
 
   async function sendVideoInstant(blob, caption='', asDoc=false){
+    if(window._enxameSendingAudio){
+      toast('Aguarde o áudio terminar');
+      const err = new Error('Aguarde o áudio terminar (AUDIO_BUSY)');
+      err.code = 'AUDIO_BUSY';
+      throw err;
+    }
     closeModal();
     if(!blob){
       const err = new Error('Selecione um vídeo (INVALID_BLOB)');
@@ -526,9 +561,8 @@
         dot.title='Ponte desconectada';
         return;
       }
-      const res = await window.EnxameBridge.request('ping', {}, { timeoutMs: 4000 });
-      const caps = res.data?.capabilities || {};
-      const ready = !!(caps.wajsReady && caps.hasSendFileMessage);
+      const res = await window.EnxameBridge.request('vmic_status', {}, { timeoutMs: 3000 });
+      const ready = !!res.data?.loaded;
       if(ready){
         dot.style.background='#30d158';
         dot.title='Pronto';
@@ -1138,6 +1172,6 @@
     setInterval(()=>{ ensurePillsBar(); updateBadges(); }, 2500);
     setInterval(()=>{ updateWPPDot(); }, 5000);
     updateWPPDot();
-    console.log('[Enxame] v2.10.0 carregado');
+    console.log('[Enxame] v2.10.1 carregado');
   })();
 })();
