@@ -711,38 +711,70 @@
 .enxame-processing-title { font-size: 14px; font-weight: 700; color: #1d1d1f; letter-spacing: -0.01em; }
 .enxame-processing-sub { font-size: 11px; color: #86868b; font-weight: 500; }
 
-/* Botão Flutuante de Cancelar Áudio - Apple Style */
-.enxame-cancel-audio-floating {
+/* Pílula de Status de Envio de Áudio - Apple Style (v2.10.2) */
+.enxame-voice-pill {
   position: fixed;
   bottom: 84px;
   left: 50%;
   transform: translateX(-50%);
   z-index: 100000;
-  background: rgba(255, 59, 48, 0.92);
+  background: rgba(29, 29, 31, 0.88);
   color: #fff;
-  border: 0.5px solid rgba(255, 255, 255, 0.2);
+  border: 0.5px solid rgba(255, 255, 255, 0.16);
   border-radius: 999px;
-  padding: 10px 22px;
-  font-size: 13.5px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-  cursor: pointer;
-  box-shadow: 0 8px 24px rgba(255, 59, 48, 0.38), 0 2px 6px rgba(0, 0, 0, 0.12);
+  padding: 8px 12px 8px 20px;
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.32), 0 2px 8px rgba(0, 0, 0, 0.16);
   backdrop-filter: blur(20px) saturate(180%);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 16px;
   user-select: none;
-  animation: enxame-slide-up .3s cubic-bezier(.16, 1, .3, 1);
-  transition: all .2s cubic-bezier(.16, 1, .3, 1);
+  animation: enxame-pill-fade-up .22s cubic-bezier(.16, 1, .3, 1);
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Inter", sans-serif;
+  max-width: calc(100% - 32px);
+  white-space: nowrap;
 }
-.enxame-cancel-audio-floating:hover {
-  background: rgba(255, 59, 48, 1);
-  transform: translateX(-50%) translateY(-2px);
-  box-shadow: 0 12px 28px rgba(255, 59, 48, 0.46);
+
+@keyframes enxame-pill-fade-up {
+  from { transform: translate(-50%, 14px) scale(0.96); opacity: 0; }
+  to { transform: translate(-50%, 0) scale(1); opacity: 1; }
 }
-.enxame-cancel-audio-floating:active {
-  transform: translateX(-50%) scale(0.96);
+
+.enxame-voice-pill-text {
+  font-size: 13.5px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: #f5f5f7;
+}
+
+.enxame-voice-pill-cancel {
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+  border: none;
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all .18s cubic-bezier(.16, 1, .3, 1);
+  font-family: inherit;
+  outline: none;
+}
+
+.enxame-voice-pill-cancel:hover {
+  background: rgba(255, 59, 48, 0.88);
+  transform: translateY(-1px);
+}
+
+.enxame-voice-pill-cancel:active {
+  transform: scale(0.95);
+}
+
+/* Evita sobreposição: quando a pílula está presente, o toast fica posicionado acima da pílula */
+body:has(#enxame-voice-pill) .enxame-toast,
+html.enxame-voice-sending .enxame-toast {
+  bottom: 144px !important;
+  z-index: 100005 !important;
 }
 

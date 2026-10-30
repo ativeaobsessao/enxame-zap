@@ -1,4 +1,4 @@
-/* Enxame Zap v2.10.1 - Envio Instantâneo de Áudio PTT via Microfone Virtual */
+/* Enxame Zap v2.10.2 - Envio Instantâneo de Áudio PTT via Microfone Virtual */
 (function(){
   const DB_NAME='enxame_zap_db';
   const DB_VERSION=3;
@@ -182,9 +182,9 @@
     }
 
     closeModal();
-    toast('Enviando...');
 
-    let cancelBtn = null;
+    let voicePill = null;
+    let voicePillText = null;
     window._enxameSendingAudio = true;
 
     try {
@@ -194,29 +194,53 @@
         throw err;
       }
 
-      // Injeta botão flutuante para cancelamento rápido
-      cancelBtn = document.createElement('button');
-      cancelBtn.className = 'enxame-cancel-audio-floating';
-      cancelBtn.innerHTML = '✕ Cancelar áudio';
+      // Cria a pílula de status única no estilo Apple (sem toast para o contador)
+      const initialSec = Math.max(1, Math.ceil(preDuration || 1));
+      voicePill = document.createElement('div');
+      voicePill.id = 'enxame-voice-pill';
+      voicePill.className = 'enxame-voice-pill';
+
+      voicePillText = document.createElement('span');
+      voicePillText.className = 'enxame-voice-pill-text';
+      voicePillText.textContent = `Enviando áudio · ${initialSec} s`;
+      voicePill.appendChild(voicePillText);
+
+      const cancelBtn = document.createElement('button');
+      cancelBtn.className = 'enxame-voice-pill-cancel';
+      cancelBtn.textContent = 'Cancelar';
+      cancelBtn.type = 'button';
       cancelBtn.onclick = () => {
         if(window.EnxameVoiceSender){
           window.EnxameVoiceSender.cancel();
         }
       };
-      document.body.appendChild(cancelBtn);
+      voicePill.appendChild(cancelBtn);
+
+      document.body.appendChild(voicePill);
 
       const res = await window.EnxameVoiceSender.send({
         blob,
         duration: preDuration || 1,
         chatTitle,
         onProgress: (remainingSec) => {
-          toast(`Enviando áudio… ${remainingSec} s`);
+          if(voicePillText) {
+            voicePillText.textContent = `Enviando áudio · ${remainingSec} s`;
+          }
         }
       });
+
+      if(voicePill && voicePill.parentNode) {
+        voicePill.remove();
+        voicePill = null;
+      }
 
       toast('Enviado');
       return { ok: true, strategy: res.strategy || 'VMIC', confirmed: res.confirmed };
     } catch(e){
+      if(voicePill && voicePill.parentNode) {
+        voicePill.remove();
+        voicePill = null;
+      }
       const errCode = e.code || 'SEND_FAILED';
       if(e.mayHaveSent){
         toast(`Pode ter sido enviado; confira o chat antes de tentar de novo (${errCode})`);
@@ -226,8 +250,8 @@
       }
       throw e;
     } finally {
-      if(cancelBtn && cancelBtn.parentNode) {
-        cancelBtn.remove();
+      if(voicePill && voicePill.parentNode) {
+        voicePill.remove();
       }
       window._enxameSendingAudio = false;
     }
@@ -1172,6 +1196,6 @@
     setInterval(()=>{ ensurePillsBar(); updateBadges(); }, 2500);
     setInterval(()=>{ updateWPPDot(); }, 5000);
     updateWPPDot();
-    console.log('[Enxame] v2.10.1 carregado');
+    console.log('[Enxame] v2.10.2 carregado');
   })();
 })();
